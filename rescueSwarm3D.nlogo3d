@@ -2,17 +2,27 @@
 
 ;This section is for the decleration of all variables other than locals
 turtles-own [foundNO messageTime resAlive resDead]
+;foundNO stores the ID of the searcher who found a survivour, the subject of the message
+;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
+;resAlive currently unimplemented lists for the new communication protocol
+;resDead currently unimplemented lists for the new communication protocol
 patches-own [floorHeight roofHeight isSolid]
-;The following section, breeds, declares sub-sets of the original turtle population
+;floorHeight stores the higest point of the floor for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
+;roofHeight stores the lowest point of the roof for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
+;isSolid stores whether the patch in question should be considred for collisions
+
+;The following section, <breeds>, declares sub-sets of the original turtle population
 breed [searchers uav] ;searchers are turtles who are currently looking for survivours
 breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
 
+;this is a list of the remaining, non-agent owned variables, generally these control the parameters for the simulation
 globals [
   ;global trackers
   rescued
   ;scale
   patchsize
   ModelHeight
+  worldSize
   ;parameters
   tickLength
   uav-shape
@@ -28,10 +38,10 @@ globals [
   searchersStayAlive
   turtleColision
   ;colors
+  baseColor
   foundColor
   normalColor
   buildingColor
-  baseColor
   rescueColor
   victimColor
   floorColor
@@ -66,11 +76,13 @@ end
 
 ;main program loop, linked to the go button, each 'press' executes this loop once
 to go
-  if ticks < 1 [reset-perspective]
+  ;If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
+  if ticks < 1 [reset-perspective] ;STUBB
   ;0. check if over max flight time
   if ticks > endurance [stop]
   ;1. if everyone has been found stop the progam
   if not any? patches with [pcolor = victimColor] [stop]
+  
   ;2. check with base if there is a message in range
   ask searchers [    
     if (distance base < comRange) and (color = foundColor) and (foundNO != nobody) [ ;check if a message bearing UAV is in range of Base 
@@ -96,6 +108,7 @@ to go
       ]
     ]
   ]
+  
   ;3. Pass messages between UAVs
   ask searchers [ ;main program loop
     if color = foundColor [ ;check if found something, if so executre following
@@ -128,6 +141,7 @@ to go
     
     
   ]
+  
   ;4 Attempt to communicate message from drone who has found victim
   ask searchersDone [ ;Main loop for those UAVs who have found a victim
     ask searchers [ ;check for nearby searchers to relay the message to 
@@ -139,18 +153,16 @@ to go
   ]
   ;increment the time counter
   tick
-;  set times (ticks mod 60) 
-;  set timem (ticks - times) / 60
 end
  
 to build-rubble
   ;scale the world
-  resize-world -20 20 -20 20 (-(modelHeight / 2)) (modelHeight / 2)
+  resize-world ( - worldSize / 2) (worldSize / 2) ( - worldSize / 2) (worldSize / 2) (-(modelHeight / 2)) (modelHeight / 2)
   
   ;Create a home for the UAVs
   set base patch 0 (min-pycor + 2) 0 ;set cooridnates for base at the bottom of the map / building entrance
   
-                                     ;THis code generates the floor
+  ;This code determines the location of the floor and roof the floor
   ask patches with [pzcor = 0] [
     set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
     set roofHeight max-pzcor - abs round ((random-normal 0 1))
@@ -175,15 +187,18 @@ to build-rubble
       set isSolid TRUE
     ]  
   ]
-  ;set-up coridors
-  let xrand round random-normal 0 6
-  let yrand round random-normal 0 4
   
-  ;make x and y walls solid 
+  
+  ;This code generates the Walls 
+  ;make the extreme x and y walls solid (that is the edges of the map) since the world does not wrap
   ask patches [
     if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
     if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
   ]
+  
+  ;set-up coridors
+  let xrand round random-normal 0 6
+  let yrand round random-normal 0 4
   
   ;This generates the wall bases
   let odds 0
@@ -213,7 +228,25 @@ to build-rubble
   ]
   
   
+  ;this Section diminishes the number of isolated wall elements, Should be Deleted?
+  ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 
+    [
+      if pzcor > floorHeight and pzcor < roofHeight [
+        set pcolor black
+        set isSolid FALSE
+      ]
+    ]
+  ]
   
+  ;this section diminishes the number of patches with excessive thickness, should be Deleted?
+  ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 
+    [
+      if pzcor > floorHeight and pzcor < roofHeight [
+        set pcolor black
+        set isSolid FALSE
+      ]
+    ]
+  ]
   
   ;This Code Generates the 3D Walls  
   ask patches [
@@ -227,10 +260,7 @@ to build-rubble
     ]
   ]
   
-  ;dont uncomment without adding issolid false/true etc 
-  ;ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 [set pcolor black]]
-  ;ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 [set pcolor black]]
-  
+ 
   ;create the baseplate
   ;Make sure base is not Located in rubble  
   ask base [ask neighbors [
@@ -240,7 +270,7 @@ to build-rubble
   ]
   ;Make sure base itself is not rubble
   ask base [
-    set pcolor 255
+    set pcolor baseColor
     set isSolid FALSE
   ]
 end
@@ -331,7 +361,7 @@ to-report seeVictim
       set whereVictim self
     ]
   ]
-  ;ask patches in-radius 5 with [pcolor = victimColor] [set whereVictim self]
+  
   report whereVictim
 end
 
@@ -345,6 +375,7 @@ to setupVariables
   ;scale
   set patchsize 1
   set ModelHeight 20
+  set worldSize 40
   ;parameters
   set tickLength 0.05
   set uav-shape "orbit 4"
@@ -457,7 +488,7 @@ density
 density
 0
 50
-11
+8
 1
 1
 NIL
