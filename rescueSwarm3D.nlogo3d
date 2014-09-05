@@ -1,27 +1,29 @@
+;Andrew Wright Copyright [2014]
+
+;This section is for the decleration of all variables other than locals
 turtles-own [foundNO messageTime resAlive resDead]
 patches-own [floorHeight roofHeight isSolid]
-breed [searchers uav]
-breed [searchersDone uav]
+;The following section, breeds, declares sub-sets of the original turtle population
+breed [searchers uav] ;searchers are turtles who are currently looking for survivours
+breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
+
 globals [
+  ;global trackers
+  rescued
+  ;scale
+  patchsize
+  ModelHeight
+  ;parameters
   tickLength
   uav-shape
   UAV-size
-  ModelHeight 
-  sightRange 
-  comRange 
-  blocked
-  turnSize 
-  odds 
-  base 
-  rescued 
-  patchsize 
+  turnSize
+  sightRange
+  comRange
   moveDistance
   detectionRange
   visionCone
-  endurance
-  ;timer
-  timem
-  times
+  endurance 
   ;genetics
   searchersStayAlive
   turtleColision
@@ -34,19 +36,23 @@ globals [
   victimColor
   floorColor
   roofColor
-]
+  ;other
+  base
+] ;End Variable Decleration
+
 
 ;setup function, run at the begining of each simulation
 to setup
+  ;reset the state and time
   clear-all
   reset-ticks
   
-  
+  ;Initialise the World
   create-searchers population ;create the UAVs
   setupVariables ;Initilise the value of variables and scale of map
   build-rubble ;build the enviroment and place victims
   
-  set base patch 0 (min-pycor + 2) 0 ;move the UAVS to the base of the map / building entrance
+  ;Give the turtles their starting characteristics
   ask turtles [
     move-to base
     set color red
@@ -55,19 +61,12 @@ to setup
     set messageTime 0
     set foundNO nobody
   ]
-  ask base [ask neighbors [
-    set pcolor black
-    set isSolid FALSE
-  ]
-  ]
-  ask base [
-    set pcolor 255
-    set isSolid FALSE
-  ]
+  
 end
 
 ;main program loop, linked to the go button, each 'press' executes this loop once
 to go
+  if ticks < 1 [reset-perspective]
   ;0. check if over max flight time
   if ticks > endurance [stop]
   ;1. if everyone has been found stop the progam
@@ -144,10 +143,148 @@ to go
 ;  set timem (ticks - times) / 60
 end
  
- 
+to build-rubble
+  ;scale the world
+  resize-world -20 20 -20 20 (-(modelHeight / 2)) (modelHeight / 2)
+  
+  ;Create a home for the UAVs
+  set base patch 0 (min-pycor + 2) 0 ;set cooridnates for base at the bottom of the map / building entrance
+  
+                                     ;THis code generates the floor
+  ask patches with [pzcor = 0] [
+    set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
+    set roofHeight max-pzcor - abs round ((random-normal 0 1))
+  ]
+  
+  ;main floor and roof building loop
+  ask patches [
+    let tempFloor 0
+    let tempRoof 0
+    set isSolid FALSE
+    ask patch pxcor pycor 0 [set tempFloor floorHeight]
+    ask patch pxcor pycor 0 [set tempRoof RoofHeight]
+    set floorHeight tempFloor
+    set roofHeight tempRoof
+    
+    if pzcor <= floorHeight [
+      set pcolor floorColor
+      set isSolid TRUE
+    ]
+    if pzcor >= roofHeight [
+      set pcolor roofColor
+      set isSolid TRUE
+    ]  
+  ]
+  ;set-up coridors
+  let xrand round random-normal 0 6
+  let yrand round random-normal 0 4
+  
+  ;make x and y walls solid 
+  ask patches [
+    if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
+    if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
+  ]
+  
+  ;This generates the wall bases
+  let odds 0
+  ask patches [
+    if pzcor = (floorHeight + 1) [
+      set odds (density)
+      if (pxcor = xrand) or (pxcor = xrand + 1) or (pxcor = xrand - 1) [set odds (odds * 4)]
+      if (pycor = yrand) or (pycor = yrand + 1) or (pycor = yrand - 1) [set odds (odds * 4)]
+      ask neighbors [
+        if pcolor = buildingColor [
+          set odds (round (odds - 1))
+        ]
+      ]
+      ask neighbors4 [
+        if pcolor = buildingColor [
+          set odds (round (odds / 8) - 2)
+        ]
+      ]
+      if count neighbors < 8 [set odds round (odds / 6)]
+      
+      if (random odds = 0) [ 
+        set pcolor buildingColor
+        set isSolid TRUE 
+      ]
+      if random 100 = 0 and isSolid = FALSE [set pcolor victimColor]
+    ]
+  ]
+  
+  
+  
+  
+  ;This Code Generates the 3D Walls  
+  ask patches [
+    set odds (0)
+    let stuffhere FALSE
+    ask patch pxcor pycor (floorHeight + 1) [if (pcolor = buildingColor) [set stuffhere TRUE]]
+    if stuffhere = TRUE  [set odds 90]
+    if odds = 90 and pzcor > (floorHeight + 1) [ 
+      set pcolor buildingColor
+      set isSolid TRUE 
+    ]
+  ]
+  
+  ;dont uncomment without adding issolid false/true etc 
+  ;ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 [set pcolor black]]
+  ;ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 [set pcolor black]]
+  
+  ;create the baseplate
+  ;Make sure base is not Located in rubble  
+  ask base [ask neighbors [
+    set pcolor black
+    set isSolid FALSE
+  ]
+  ]
+  ;Make sure base itself is not rubble
+  ask base [
+    set pcolor 255
+    set isSolid FALSE
+  ]
+end
+
+to uavBehave
+  ifelse color = foundColor and messageTime >= 0
+  [
+    ;this is for if the UAV is trying to pass on a message
+    ifelse messageTime < 60 [] [set messageTime -10]
+    set messageTime (messageTime + 1)
+  ]
+  [
+    ;this is the behaviour otherwise
+    ifelse seeVictim != nobody [face seeVictim]
+    [
+      forward moveDistance
+      adjustPitch
+    ]
+    ;default is just to fly forward
+    forward moveDistance
+    adjustPitch
+  ]
+  
+  ;if the path should be traced, set the space the uav currently occupies to another color
+  ;set pcolor yellow
+end
+
+to adjustPitch
+  let desiredHeight 0
+  ask patch-here [
+    set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)
+  ]
+  let pitchRate 0
+  set pitchRate turnSize * abs ((pzcor - desiredHeight) / (roofHeight - floorHeight))
+  ifelse pzcor < desiredHeight [
+    set pitch pitchRate
+  ]
+  [
+    set pitch (- pitchRate)
+  ]
+end
 
 to-report clearPath?
-  set blocked FALSE
+  let blocked FALSE
   let target-patch1 patch-ahead sightRange
   if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count turtles-on target-patch1 > 0 and turtleColision = TRUE) [
     set blocked TRUE
@@ -201,126 +338,6 @@ end
 to-report inRange?
   ifelse distance base < comRange [report TRUE] [report FALSE]
 end 
-
-to build-rubble
-  ;scale the world
-  resize-world -20 20 -20 20 (-(modelHeight / 2)) (modelHeight / 2)
-  ;THis code generates the floor
-  ask patches with [pzcor = 0] [
-    set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
-    set roofHeight max-pzcor - abs round ((random-normal 0 1))
-  ]
-  
-  ;main floor and roof building loop
-  ask patches [
-    let tempFloor 0
-    let tempRoof 0
-    set isSolid FALSE
-    ask patch pxcor pycor 0 [set tempFloor floorHeight]
-    ask patch pxcor pycor 0 [set tempRoof RoofHeight]
-    set floorHeight tempFloor
-    set roofHeight tempRoof
-    
-    if pzcor <= floorHeight [
-      set pcolor floorColor
-      set isSolid TRUE
-    ]
-    if pzcor >= roofHeight [
-      set pcolor roofColor
-      set isSolid TRUE
-    ]  
-  ]
-  ;set-up coridors
-  let xrand round random-normal 0 6
-  let yrand round random-normal 0 4
-  
-  ;make x and y walls solid 
-  ask patches [
-    if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
-    if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
-  ]
-  
-  ;This generates the wall bases
-  ask patches [
-    if pzcor = (floorHeight + 1) [
-      set odds (density)
-      if (pxcor = xrand) or (pxcor = xrand + 1) or (pxcor = xrand - 1) [set odds (odds * 4)]
-      if (pycor = yrand) or (pycor = yrand + 1) or (pycor = yrand - 1) [set odds (odds * 4)]
-      ask neighbors [
-        if pcolor = buildingColor [
-          set odds (round (odds - 1))
-        ]
-      ]
-      ask neighbors4 [
-        if pcolor = buildingColor [
-          set odds (round (odds / 8) - 2)
-        ]
-      ]
-      if count neighbors < 8 [set odds round (odds / 6)]
-      
-      if (random odds = 0) [ 
-        set pcolor buildingColor
-        set isSolid TRUE 
-      ]
-      if random 100 = 0 and isSolid = FALSE [set pcolor victimColor]
-    ]
-  ]
-  
-
-  
-  
-  ;This Code Generates the 3D Walls  
-  ask patches [
-    set odds (0)
-    let stuffhere FALSE
-    ask patch pxcor pycor (floorHeight + 1) [if (pcolor = buildingColor) [set stuffhere TRUE]]
-    if stuffhere = TRUE  [set odds 90]
-    if odds = 90 and pzcor > (floorHeight + 1) [ 
-      set pcolor buildingColor
-      set isSolid TRUE 
-    ]
-  ]
-  
-  ;dont uncomment without adding issolid false/true etc 
-  ;ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 [set pcolor black]]
-  ;ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 [set pcolor black]]
-end
-
-to uavBehave
-  ifelse color = foundColor and messageTime >= 0
-  [
-    ;this is for if the UAV is trying to pass on a message
-    ifelse messageTime < 60 [] [set messageTime -10]
-    set messageTime (messageTime + 1)
-  ]
-  [
-    ;this is the behaviour otherwise
-    ifelse seeVictim != nobody [face seeVictim]
-    [
-      forward moveDistance
-      adjustPitch
-    ]
-    ;default is just to fly forward
-    forward moveDistance
-    adjustPitch
-  ]
-;  set pcolor yellow
-end
-
-to adjustPitch
-  let desiredHeight 0
-  ask patch-here [
-    set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)
-  ]
-  let pitchRate 0
-  set pitchRate turnSize * abs ((pzcor - desiredHeight) / (roofHeight - floorHeight))
-  ifelse pzcor < desiredHeight [
-    set pitch pitchRate
-  ]
-  [
-    set pitch (- pitchRate)
-  ]
-end
 
 to setupVariables
   ;global trackers
@@ -440,7 +457,7 @@ density
 density
 0
 50
-15
+11
 1
 1
 NIL
