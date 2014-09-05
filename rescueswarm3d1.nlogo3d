@@ -1,0 +1,846 @@
+turtles-own [foundNO messageTime resAlive resDead]
+patches-own [floorHeight roofHeight isSolid]
+breed [searchers uav]
+breed [searchersDone uav]
+globals [
+  tickLength
+  uav-shape
+  UAV-size
+  ModelHeight 
+  sightRange 
+  comRange 
+  blocked
+  turnSize 
+  odds 
+  base 
+  rescued 
+  patchsize 
+  moveDistance
+  detectionRange
+  visionCone
+  endurance
+  ;timer
+  timem
+  times
+  ;genetics
+  searchersStayAlive
+  turtleColision
+  ;colors
+  foundColor
+  normalColor
+  buildingColor
+  baseColor
+  rescueColor
+  victimColor
+  floorColor
+  roofColor
+]
+
+;setup function, run at the begining of each simulation
+to setup
+  clear-all
+  reset-ticks
+  
+  
+  create-searchers population ;create the UAVs
+  setupVariables ;Initilise the value of variables and scale of map
+  build-rubble ;build the enviroment and place victims
+  
+  set base patch 0 (min-pycor + 2) 0 ;move the UAVS to the base of the map / building entrance
+  ask turtles [
+    move-to base
+    set color red
+    set size uav-Size
+    set shape uav-shape
+    set messageTime 0
+    set foundNO nobody
+  ]
+  ask base [ask neighbors [
+    set pcolor black
+    set isSolid FALSE
+  ]
+  ]
+  ask base [
+    set pcolor 255
+    set isSolid FALSE
+  ]
+end
+
+;main program loop, linked to the go button, each 'press' executes this loop once
+to go
+  ;0. check if over max flight time
+  if ticks > endurance [stop]
+  ;1. if everyone has been found stop the progam
+  if not any? patches with [pcolor = victimColor] [stop]
+  ;2. check with base if there is a message in range
+  ask searchers [    
+    if (distance base < comRange) and (color = foundColor) and (foundNO != nobody) [ ;check if a message bearing UAV is in range of Base 
+      ask foundNO [
+        set pcolor lime ;indicates that the rescuers now know the location of the victim
+        set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
+        ;this bit is cheaty, can't comm to all at once
+        ask searchers [ 
+          if foundNO = myself [
+            set color normalColor
+            set foundNO nobody
+          ]
+        ]
+        ;end cheaty
+        if searchersStayAlive [
+        hatch-searchers 1 [
+          set color normalColor
+          set size uav-Size
+          set shape uav-shape
+          set foundNO nobody]
+        ]
+        die
+      ]
+    ]
+  ]
+  ;3. Pass messages between UAVs
+  ask searchers [ ;main program loop
+    if color = foundColor [ ;check if found something, if so executre following
+      ask searchers [ ;try and communicate the message to other nearby UAVS
+        
+        if distance myself < comRange ;check if they are in range of me
+        [set color foundColor ;if they are make those UAVs white also
+          let message nobody ;dummy value of a message, set up to store the ID of the rescue drone
+          ask myself [set message foundNO] ;retrive the rescue drone ID
+          set foundNO message] ;store the rescue drone ID in current UAVs memory 
+        ;was linked to previous if statment, ifelse (foundNO != nobody) [if distance foundNO > comRange [set color normalColor]][set color normalColor]] ;make all out of range UAVs red??
+        
+      ]
+      
+    ]
+    ;If nothing has been found, execute the remaining code
+    ifelse clearPath? [
+      right random turnSize
+      ;adjustPitch
+      ] ;if blocked turn a random amount between 0 and 60 degrees
+      [uavBehave] ;otherwise execute normal movement code
+    
+    if pcolor = blue and (count searchersDone-here) < 1 and (random 100 < detectionChance) [
+      hatch-searchersDone 1 [
+        set color rescueColor
+        set size uav-Size
+        set shape uav-shape]
+      die
+    ]
+    
+    
+  ]
+  ;4 Attempt to communicate message from drone who has found victim
+  ask searchersDone [ ;Main loop for those UAVs who have found a victim
+    ask searchers [ ;check for nearby searchers to relay the message to 
+      ifelse distance myself < comRange ;check if they are in range
+      [set color foundColor ;change color to white if in range
+        set foundNO myself] ;pass on rescue message (UAV ID)
+      [];set color red] ; otherwise set color to red
+    ]
+  ]
+  ;increment the time counter
+  tick
+;  set times (ticks mod 60) 
+;  set timem (ticks - times) / 60
+end
+ 
+ 
+
+to-report clearPath?
+  set blocked FALSE
+  let target-patch1 patch-ahead sightRange
+  if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count turtles-on target-patch1 > 0 and turtleColision = TRUE) [
+    set blocked TRUE
+  ]
+  let target-patch2 patch-right-and-ahead 30 sightRange
+  if target-patch2 = nobody or [isSolid] of target-patch2 = TRUE or (count turtles-on target-patch2 > 0 and turtleColision = TRUE)[
+    set blocked TRUE
+  ]
+  let target-patch3 patch-left-and-ahead 30 sightRange
+  if target-patch3 = nobody or [isSolid] of target-patch3 = TRUE or (count turtles-on target-patch3 > 0 and turtleColision = TRUE)[
+    set blocked TRUE
+  ]
+  report blocked
+end
+
+to-report seeVictim
+  let whereVictim nobody
+  let target-patch1 patch-ahead detectionRange
+  ask target-patch1 [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
+  let target-patch2 patch-right-and-ahead (visionCone / 2) detectionRange
+  ask target-patch2 [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
+  let target-patch3 patch-left-and-ahead (visionCone / 2) detectionRange
+  ask target-patch2 [
+    ask patch pxcor pycor (floorHeight + 1)[
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
+  ask patch pxcor pycor (floorHeight + 1) [
+    if [pcolor] of self = victimColor and count turtles-here < 1 [
+      set whereVictim self
+    ]
+  ]
+  ;ask patches in-radius 5 with [pcolor = victimColor] [set whereVictim self]
+  report whereVictim
+end
+
+to-report inRange?
+  ifelse distance base < comRange [report TRUE] [report FALSE]
+end 
+
+to build-rubble
+  ;scale the world
+  resize-world -20 20 -20 20 (-(modelHeight / 2)) (modelHeight / 2)
+  ;THis code generates the floor
+  ask patches with [pzcor = 0] [
+    set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
+    set roofHeight max-pzcor - abs round ((random-normal 0 1))
+  ]
+  
+  ;main floor and roof building loop
+  ask patches [
+    let tempFloor 0
+    let tempRoof 0
+    set isSolid FALSE
+    ask patch pxcor pycor 0 [set tempFloor floorHeight]
+    ask patch pxcor pycor 0 [set tempRoof RoofHeight]
+    set floorHeight tempFloor
+    set roofHeight tempRoof
+    
+    if pzcor <= floorHeight [
+      set pcolor floorColor
+      set isSolid TRUE
+    ]
+    if pzcor >= roofHeight [
+      set pcolor roofColor
+      set isSolid TRUE
+    ]  
+  ]
+  ;set-up coridors
+  let xrand round random-normal 0 6
+  let yrand round random-normal 0 4
+  
+  ;make x and y walls solid 
+  ask patches [
+    if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
+    if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
+  ]
+  
+  ;This generates the wall bases
+  ask patches [
+    if pzcor = (floorHeight + 1) [
+      set odds (density)
+      if (pxcor = xrand) or (pxcor = xrand + 1) or (pxcor = xrand - 1) [set odds (odds * 4)]
+      if (pycor = yrand) or (pycor = yrand + 1) or (pycor = yrand - 1) [set odds (odds * 4)]
+      ask neighbors [
+        if pcolor = buildingColor [
+          set odds (round (odds - 1))
+        ]
+      ]
+      ask neighbors4 [
+        if pcolor = buildingColor [
+          set odds (round (odds / 8) - 2)
+        ]
+      ]
+      if count neighbors < 8 [set odds round (odds / 6)]
+      
+      if (random odds = 0) [ 
+        set pcolor buildingColor
+        set isSolid TRUE 
+      ]
+      if random 100 = 0 and isSolid = FALSE [set pcolor victimColor]
+    ]
+  ]
+  
+
+  
+  
+  ;This Code Generates the 3D Walls  
+  ask patches [
+    set odds (0)
+    let stuffhere FALSE
+    ask patch pxcor pycor (floorHeight + 1) [if (pcolor = buildingColor) [set stuffhere TRUE]]
+    if stuffhere = TRUE  [set odds 90]
+    if odds = 90 and pzcor > (floorHeight + 1) [ 
+      set pcolor buildingColor
+      set isSolid TRUE 
+    ]
+  ]
+  
+  ;dont uncomment without adding issolid false/true etc 
+  ;ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 [set pcolor black]]
+  ;ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 [set pcolor black]]
+end
+
+to uavBehave
+  ifelse color = foundColor and messageTime >= 0
+  [
+    ;this is for if the UAV is trying to pass on a message
+    ifelse messageTime < 60 [] [set messageTime -10]
+    set messageTime (messageTime + 1)
+  ]
+  [
+    ;this is the behaviour otherwise
+    ifelse seeVictim != nobody [face seeVictim]
+    [
+      forward moveDistance
+      adjustPitch
+    ]
+    ;default is just to fly forward
+    forward moveDistance
+    adjustPitch
+  ]
+;  set pcolor yellow
+end
+
+to adjustPitch
+  let desiredHeight 0
+  ask patch-here [
+    set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)
+  ]
+  let pitchRate 0
+  set pitchRate turnSize * abs ((pzcor - desiredHeight) / (roofHeight - floorHeight))
+  ifelse pzcor < desiredHeight [
+    set pitch pitchRate
+  ]
+  [
+    set pitch (- pitchRate)
+  ]
+end
+
+to setupVariables
+  ;global trackers
+  set rescued 0
+  ;scale
+  set patchsize 1
+  set ModelHeight 20
+  ;parameters
+  set tickLength 0.05
+  set uav-shape "orbit 4"
+  set UAV-size 1.5
+  set turnSize 60 * tickLength 
+  set sightRange tickLength * 2
+  set comRange 10
+  set moveDistance tickLength * 1.5
+  set detectionRange sightRange
+  set visionCone 60
+  set endurance (60 * 30) / tickLength 
+  ;genetics
+  set searchersStayAlive TRUE
+  set turtleColision FALSE
+  ;colors
+  set foundColor white
+  set normalColor orange
+  set buildingColor [70 200 70 7]
+  set baseColor 255
+  set rescueColor yellow
+  set victimColor blue
+  set floorColor [100 100 100]
+  set roofColor [100 100 100 10] 
+end
+@#$#@#$#@
+GRAPHICS-WINDOW
+0
+0
+245
+236
+20
+20
+5.0
+1
+10
+1
+1
+1
+0
+1
+1
+1
+-20
+20
+-20
+20
+-10
+10
+1
+0
+1
+ticks
+30.0
+
+SLIDER
+1076
+10
+1248
+43
+population
+population
+1
+100
+10
+1
+1
+NIL
+HORIZONTAL
+
+BUTTON
+1181
+46
+1247
+79
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1077
+46
+1140
+79
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1078
+82
+1250
+115
+density
+density
+0
+50
+15
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+959
+10
+1072
+55
+Victims Rescued
+rescued
+0
+1
+11
+
+SLIDER
+1077
+117
+1249
+150
+detectionChance
+detectionChance
+0
+100
+100
+1
+1
+NIL
+HORIZONTAL
+
+@#$#@#$#@
+## WHAT IS IT?
+
+(a general understanding of what the model is trying to show or explain)
+
+## HOW IT WORKS
+
+(what rules the agents use to create the overall behavior of the model)
+
+## HOW TO USE IT
+
+(how to use the model, including a description of each of the items in the Interface tab)
+
+## THINGS TO NOTICE
+
+(suggested things for the user to notice while running the model)
+
+## THINGS TO TRY
+
+(suggested things for the user to try to do (move sliders, switches, etc.) with the model)
+
+## EXTENDING THE MODEL
+
+(suggested things to add or change in the Code tab to make the model more complicated, detailed, accurate, etc.)
+
+## NETLOGO FEATURES
+
+(interesting or unusual features of NetLogo that the model uses, particularly in the Code tab; or where workarounds were needed for missing features)
+
+## RELATED MODELS
+
+(models in the NetLogo Models Library and elsewhere which are of related interest)
+
+## CREDITS AND REFERENCES
+
+(a reference to the model's URL on the web if it has one, as well as any other necessary credits, citations, and links)
+@#$#@#$#@
+default
+true
+0
+Polygon -7500403 true true 150 5 40 250 150 205 260 250
+
+airplane
+true
+0
+Polygon -7500403 true true 150 0 135 15 120 60 120 105 15 165 15 195 120 180 135 240 105 270 120 285 150 270 180 285 210 270 165 240 180 180 285 195 285 165 180 105 180 60 165 15
+
+arrow
+true
+0
+Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
+
+box
+false
+0
+Polygon -7500403 true true 150 285 285 225 285 75 150 135
+Polygon -7500403 true true 150 135 15 75 150 15 285 75
+Polygon -7500403 true true 15 75 15 225 150 285 150 135
+Line -16777216 false 150 285 150 135
+Line -16777216 false 150 135 15 75
+Line -16777216 false 150 135 285 75
+
+bug
+true
+0
+Circle -7500403 true true 96 182 108
+Circle -7500403 true true 110 127 80
+Circle -7500403 true true 110 75 80
+Line -7500403 true 150 100 80 30
+Line -7500403 true 150 100 220 30
+
+butterfly
+true
+0
+Polygon -7500403 true true 150 165 209 199 225 225 225 255 195 270 165 255 150 240
+Polygon -7500403 true true 150 165 89 198 75 225 75 255 105 270 135 255 150 240
+Polygon -7500403 true true 139 148 100 105 55 90 25 90 10 105 10 135 25 180 40 195 85 194 139 163
+Polygon -7500403 true true 162 150 200 105 245 90 275 90 290 105 290 135 275 180 260 195 215 195 162 165
+Polygon -16777216 true false 150 255 135 225 120 150 135 120 150 105 165 120 180 150 165 225
+Circle -16777216 true false 135 90 30
+Line -16777216 false 150 105 195 60
+Line -16777216 false 150 105 105 60
+
+car
+false
+0
+Polygon -7500403 true true 300 180 279 164 261 144 240 135 226 132 213 106 203 84 185 63 159 50 135 50 75 60 0 150 0 165 0 225 300 225 300 180
+Circle -16777216 true false 180 180 90
+Circle -16777216 true false 30 180 90
+Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
+Circle -7500403 true true 47 195 58
+Circle -7500403 true true 195 195 58
+
+circle
+false
+0
+Circle -7500403 true true 0 0 300
+
+circle 2
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+
+cow
+false
+0
+Polygon -7500403 true true 200 193 197 249 179 249 177 196 166 187 140 189 93 191 78 179 72 211 49 209 48 181 37 149 25 120 25 89 45 72 103 84 179 75 198 76 252 64 272 81 293 103 285 121 255 121 242 118 224 167
+Polygon -7500403 true true 73 210 86 251 62 249 48 208
+Polygon -7500403 true true 25 114 16 195 9 204 23 213 25 200 39 123
+
+cylinder
+false
+0
+Circle -7500403 true true 0 0 300
+
+dot
+false
+0
+Circle -7500403 true true 90 90 120
+
+face happy
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 255 90 239 62 213 47 191 67 179 90 203 109 218 150 225 192 218 210 203 227 181 251 194 236 217 212 240
+
+face neutral
+false
+0
+Circle -7500403 true true 8 7 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Rectangle -16777216 true false 60 195 240 225
+
+face sad
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 168 90 184 62 210 47 232 67 244 90 220 109 205 150 198 192 205 210 220 227 242 251 229 236 206 212 183
+
+fish
+false
+0
+Polygon -1 true false 44 131 21 87 15 86 0 120 15 150 0 180 13 214 20 212 45 166
+Polygon -1 true false 135 195 119 235 95 218 76 210 46 204 60 165
+Polygon -1 true false 75 45 83 77 71 103 86 114 166 78 135 60
+Polygon -7500403 true true 30 136 151 77 226 81 280 119 292 146 292 160 287 170 270 195 195 210 151 212 30 166
+Circle -16777216 true false 215 106 30
+
+flag
+false
+0
+Rectangle -7500403 true true 60 15 75 300
+Polygon -7500403 true true 90 150 270 90 90 30
+Line -7500403 true 75 135 90 135
+Line -7500403 true 75 45 90 45
+
+flower
+false
+0
+Polygon -10899396 true false 135 120 165 165 180 210 180 240 150 300 165 300 195 240 195 195 165 135
+Circle -7500403 true true 85 132 38
+Circle -7500403 true true 130 147 38
+Circle -7500403 true true 192 85 38
+Circle -7500403 true true 85 40 38
+Circle -7500403 true true 177 40 38
+Circle -7500403 true true 177 132 38
+Circle -7500403 true true 70 85 38
+Circle -7500403 true true 130 25 38
+Circle -7500403 true true 96 51 108
+Circle -16777216 true false 113 68 74
+Polygon -10899396 true false 189 233 219 188 249 173 279 188 234 218
+Polygon -10899396 true false 180 255 150 210 105 210 75 240 135 240
+
+house
+false
+0
+Rectangle -7500403 true true 45 120 255 285
+Rectangle -16777216 true false 120 210 180 285
+Polygon -7500403 true true 15 120 150 15 285 120
+Line -16777216 false 30 120 270 120
+
+leaf
+false
+0
+Polygon -7500403 true true 150 210 135 195 120 210 60 210 30 195 60 180 60 165 15 135 30 120 15 105 40 104 45 90 60 90 90 105 105 120 120 120 105 60 120 60 135 30 150 15 165 30 180 60 195 60 180 120 195 120 210 105 240 90 255 90 263 104 285 105 270 120 285 135 240 165 240 180 270 195 240 210 180 210 165 195
+Polygon -7500403 true true 135 195 135 240 120 255 105 255 105 285 135 285 165 240 165 195
+
+line
+true
+0
+Line -7500403 true 150 0 150 300
+
+line half
+true
+0
+Line -7500403 true 150 0 150 150
+
+orbit 4
+true
+0
+Circle -7500403 true true 116 11 67
+Circle -7500403 true true 116 221 67
+Circle -7500403 true true 221 116 67
+Circle -7500403 false true 45 45 210
+Circle -7500403 true true 11 116 67
+
+pentagon
+false
+0
+Polygon -7500403 true true 150 15 15 120 60 285 240 285 285 120
+
+person
+false
+0
+Circle -7500403 true true 110 5 80
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Rectangle -7500403 true true 127 79 172 94
+Polygon -7500403 true true 195 90 240 150 225 180 165 105
+Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+plant
+false
+0
+Rectangle -7500403 true true 135 90 165 300
+Polygon -7500403 true true 135 255 90 210 45 195 75 255 135 285
+Polygon -7500403 true true 165 255 210 210 255 195 225 255 165 285
+Polygon -7500403 true true 135 180 90 135 45 120 75 180 135 210
+Polygon -7500403 true true 165 180 165 210 225 180 255 120 210 135
+Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
+Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
+Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
+
+sheep
+false
+15
+Circle -1 true true 203 65 88
+Circle -1 true true 70 65 162
+Circle -1 true true 150 105 120
+Polygon -7500403 true false 218 120 240 165 255 165 278 120
+Circle -7500403 true false 214 72 67
+Rectangle -1 true true 164 223 179 298
+Polygon -1 true true 45 285 30 285 30 240 15 195 45 210
+Circle -1 true true 3 83 150
+Rectangle -1 true true 65 221 80 296
+Polygon -1 true true 195 285 210 285 210 240 240 210 195 210
+Polygon -7500403 true false 276 85 285 105 302 99 294 83
+Polygon -7500403 true false 219 85 210 105 193 99 201 83
+
+square
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+
+square 2
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+Rectangle -16777216 true false 60 60 240 240
+
+star
+false
+0
+Polygon -7500403 true true 151 1 185 108 298 108 207 175 242 282 151 216 59 282 94 175 3 108 116 108
+
+target
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+Circle -7500403 true true 60 60 180
+Circle -16777216 true false 90 90 120
+Circle -7500403 true true 120 120 60
+
+tree
+false
+0
+Circle -7500403 true true 118 3 94
+Rectangle -6459832 true false 120 195 180 300
+Circle -7500403 true true 65 21 108
+Circle -7500403 true true 116 41 127
+Circle -7500403 true true 45 90 120
+Circle -7500403 true true 104 74 152
+
+triangle
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+
+triangle 2
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+Polygon -16777216 true false 151 99 225 223 75 224
+
+truck
+false
+0
+Rectangle -7500403 true true 4 45 195 187
+Polygon -7500403 true true 296 193 296 150 259 134 244 104 208 104 207 194
+Rectangle -1 true false 195 60 195 105
+Polygon -16777216 true false 238 112 252 141 219 141 218 112
+Circle -16777216 true false 234 174 42
+Rectangle -7500403 true true 181 185 214 194
+Circle -16777216 true false 144 174 42
+Circle -16777216 true false 24 174 42
+Circle -7500403 false true 24 174 42
+Circle -7500403 false true 144 174 42
+Circle -7500403 false true 234 174 42
+
+turtle
+true
+0
+Polygon -10899396 true false 215 204 240 233 246 254 228 266 215 252 193 210
+Polygon -10899396 true false 195 90 225 75 245 75 260 89 269 108 261 124 240 105 225 105 210 105
+Polygon -10899396 true false 105 90 75 75 55 75 40 89 31 108 39 124 60 105 75 105 90 105
+Polygon -10899396 true false 132 85 134 64 107 51 108 17 150 2 192 18 192 52 169 65 172 87
+Polygon -10899396 true false 85 204 60 233 54 254 72 266 85 252 107 210
+Polygon -7500403 true true 119 75 179 75 209 101 224 135 220 225 175 261 128 261 81 224 74 135 88 99
+
+wheel
+false
+0
+Circle -7500403 true true 3 3 294
+Circle -16777216 true false 30 30 240
+Line -7500403 true 150 285 150 15
+Line -7500403 true 15 150 285 150
+Circle -7500403 true true 120 120 60
+Line -7500403 true 216 40 79 269
+Line -7500403 true 40 84 269 221
+Line -7500403 true 40 216 269 79
+Line -7500403 true 84 40 221 269
+
+wolf
+false
+0
+Polygon -16777216 true false 253 133 245 131 245 133
+Polygon -7500403 true true 2 194 13 197 30 191 38 193 38 205 20 226 20 257 27 265 38 266 40 260 31 253 31 230 60 206 68 198 75 209 66 228 65 243 82 261 84 268 100 267 103 261 77 239 79 231 100 207 98 196 119 201 143 202 160 195 166 210 172 213 173 238 167 251 160 248 154 265 169 264 178 247 186 240 198 260 200 271 217 271 219 262 207 258 195 230 192 198 210 184 227 164 242 144 259 145 284 151 277 141 293 140 299 134 297 127 273 119 270 105
+Polygon -7500403 true true -1 195 14 180 36 166 40 153 53 140 82 131 134 133 159 126 188 115 227 108 236 102 238 98 268 86 269 92 281 87 269 103 269 113
+
+x
+false
+0
+Polygon -7500403 true true 270 75 225 30 30 225 75 270
+Polygon -7500403 true true 30 75 75 30 270 225 225 270
+
+@#$#@#$#@
+NetLogo 3D 5.1.0
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+default
+0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+
+@#$#@#$#@
+0
+@#$#@#$#@
