@@ -475,7 +475,7 @@ HORIZONTAL
 @#$#@#$#@
 ## WHAT IS IT?
 
-(a general understanding of what the model is trying to show or explain)
+A model of a Quadrotor swarm, autonomously programmed to search a collapsed structure for survivours, and relay the message back to base
 
 ## HOW IT WORKS
 
