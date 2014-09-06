@@ -19,24 +19,28 @@ breed [searchersDone uav] ;seachersDone are turtles who have located a survivour
 globals [
   ;global trackers
   rescued
+  
   ;scale
-  patchsize
+  patchSize
   ModelHeight
   worldSize
+  
   ;parameters
   tickLength
   uav-shape
   UAV-size
-  turnSize
   sightRange
   comRange
   moveDistance
   detectionRange
   visionCone
   endurance 
+  
   ;genetics
   searchersStayAlive
   turtleColision
+  turnSize
+  
   ;colors
   baseColor
   foundColor
@@ -46,6 +50,7 @@ globals [
   victimColor
   floorColor
   roofColor
+  
   ;other
   base
 ] ;End Variable Decleration
@@ -157,6 +162,7 @@ end
  
 to build-rubble
   ;scale the world
+  set-patch-size patchSize
   resize-world ( - worldSize / 2) (worldSize / 2) ( - worldSize / 2) (worldSize / 2) (-(modelHeight / 2)) (modelHeight / 2)
   
   ;Create a home for the UAVs
@@ -372,24 +378,28 @@ end
 to setupVariables
   ;global trackers
   set rescued 0
+  
   ;scale
-  set patchsize 1
+  set patchSize 10
   set ModelHeight 20
   set worldSize 40
+  
   ;parameters
   set tickLength 0.05
   set uav-shape "orbit 4"
-  set UAV-size 1.5
-  set turnSize 60 * tickLength 
-  set sightRange tickLength * 2
+  set UAV-size 1
+  set sightRange 2
   set comRange 10
-  set moveDistance tickLength * 1.5
+  set moveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
-  set endurance (60 * 30) / tickLength 
+  set endurance 30
+  
   ;genetics
   set searchersStayAlive TRUE
   set turtleColision FALSE
+  set turnSize 60
+  
   ;colors
   set foundColor white
   set normalColor orange
@@ -398,17 +408,24 @@ to setupVariables
   set rescueColor yellow
   set victimColor blue
   set floorColor [100 100 100]
-  set roofColor [100 100 100 10] 
+  set roofColor [100 100 100 10]
+  
+  ;Now Scale any variables which need it
+  set turnSize turnSize * tickLength
+  set sightRange sightRange * tickLength
+  set moveDistance moveDistance * tickLength
+  set endurance (endurance * 60) / tickLength
+   
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 0
 0
-245
-236
+420
+441
 20
 20
-5.0
+10.0
 1
 10
 1
