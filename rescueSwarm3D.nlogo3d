@@ -136,7 +136,7 @@ to go
       ] ;if blocked turn a random amount between 0 and 60 degrees
       [uavBehave] ;otherwise execute normal movement code
     
-    if pcolor = blue and (count searchersDone-here) < 1 and (random 100 < detectionChance) [
+    if pcolor = blue and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
       hatch-searchersDone 1 [
         set color rescueColor
         set size uav-Size
