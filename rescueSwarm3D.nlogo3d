@@ -13,7 +13,7 @@
 ;   limitations under the License.
 
 ;This section is for the decleration of all variables other than locals
-turtles-own [messageTime resAlive resDead searching]
+turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife inFlight searching]
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
 ;resAlive currently unimplemented lists for the new communication protocol
 ;resDead currently unimplemented lists for the new communication protocol
