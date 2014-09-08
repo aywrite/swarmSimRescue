@@ -17,14 +17,16 @@
 ;------------------------------------------------------------------------------
 
 
-;This section is for the decleration of all variables other than locals
+;-----This section is for the decleration of all variables other than locals-----
 turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife inFlight searching]
 
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
-;resAlive currently unimplemented lists for the new communication protocol
-;resDead currently unimplemented lists for the new communication protocol
+;resAlive stores the survivor list, that is those that victims that have been found but that base has not yet been informed of, according to the UAV curating the list
+;resDead stores the notified list, that is those victims who have been located and that base has been informed of, according to the UAV curating the list
+;Both resAlive and resDead store the infomation as a list of lists, where the sublist is of the format [UAV_ID x-cor y-cor z-cor] with infomation pertaining to the UAV who found a person, not the UAV who owns the list
 ;compontentBatteryLife and motorBatteryLife store the life remaining time in seconds for each turtle (the UAVs have seperate batteries for each, so must be tracked seperatley)
 ;inFLight stores whether the current UAV is flying or not, since this is simpler than calculating this each time (this may not be needed, update later accordingly)
+;searching BOOLEAN, stores whether a UAV is activley looking or has currently found someone and is waiting to relay the message to base
 
 patches-own [floorHeight roofHeight isSolid]
 ;floorHeight stores the higest point of the floor for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
@@ -78,7 +80,8 @@ globals [
   base
   baseResAlive
   baseResDead
-] ;End Variable Decleration
+] 
+;-----End Variable Decleration-----
 
 
 ;setup function, run at the begining of each simulation
