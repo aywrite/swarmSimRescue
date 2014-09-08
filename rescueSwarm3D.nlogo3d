@@ -113,13 +113,14 @@ end
 
 ;main program loop, linked to the go button, each 'press' executes this loop once
 to go
-  ;If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
+  ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
   if ticks < 1 [reset-perspective] ;STUBB
-  ;0. check if over max flight time
+  ;2. check if over max flight time
   if ticks > endurance [stop]
-  ;1. if everyone has been found stop the progam
+  ;3. if everyone has been found stop the progam
   if not any? patches with [pcolor = victimColor] [stop]
   
+  ;4. check the distances between all UAVs and show links where they are in communication range of each other
   ask links [
     ask both-ends [ifelse distance-nowrap other-end > comRange [
       ask myself [hide-link]
@@ -130,8 +131,7 @@ to go
   ]
 
 
-  
-  ;2. check with base if there is a message in range
+  ;5. check with base if there is a message in range
   ask searchers [
     ifelse resAlive = [] [set color normalColor] [set color foundColor]   
     if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
@@ -152,6 +152,7 @@ to go
               set resDead baseResDead
               set resAlive baseResAlive
             ]
+            
             ;If the craft can continue having found someone, change their breed and return them to normal duties
             if searchersStayAlive [
               hatch-searchers 1 [
@@ -160,7 +161,8 @@ to go
                 ]
             ]
             ;either way the old craft dies, as it has informed base now
-            die 
+            die
+             
           ]
         ]
         
@@ -175,7 +177,7 @@ to go
     
   ]
   
-  ;3. Pass messages between UAVs
+  ;6. Pass messages between UAVs
   ask searchers [
     if resAlive != [] [ ;check if found something, if so executre following
       ask searchers [ ;try and communicate the message to other nearby UAVS
@@ -193,7 +195,7 @@ to go
       ] ;if blocked turn a random amount between 0 and 60 degrees
       [uavBehave] ;otherwise execute normal movement code
     
-    if pcolor = blue and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
+    if pcolor = victimColor and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
       hatch-searchersDone 1 [
         set color rescueColor
         set resAlive fput (list self pxcor pycor pzcor) resAlive
@@ -205,7 +207,7 @@ to go
     
   ]
   
-  ;4 Attempt to communicate message from drone who has found victim
+  ;7 Attempt to communicate message from drone who has found victim
   ask searchersDone [ ;Main loop for those UAVs who have found a victim
     ask searchers [ ;check for nearby searchers to relay the message to 
       if distance-nowrap myself < comRange ;check if they are in range
@@ -504,9 +506,9 @@ to setupVariables
   set normalColor orange
   set buildingColor [70 200 70 7]
   set baseColor 255
-  set rescueColor yellow
-  set victimColor blue
-  set victimFoundColor lime
+  set rescueColor lime
+  set victimColor [0 130 255 150]
+  set victimFoundColor yellow
   set comColor [250 200 150]
   set floorColor [100 100 100]
   set roofColor [100 100 100 10]
