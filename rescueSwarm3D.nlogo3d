@@ -13,7 +13,7 @@
 ;   limitations under the License.
 
 ;This section is for the decleration of all variables other than locals
-turtles-own [messageTime resAlive resDead]
+turtles-own [messageTime resAlive resDead searching]
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
 ;resAlive currently unimplemented lists for the new communication protocol
 ;resDead currently unimplemented lists for the new communication protocol
@@ -24,7 +24,7 @@ patches-own [floorHeight roofHeight isSolid]
 
 ;The following section, <breeds>, declares sub-sets of the original turtle population
 breed [searchers uav] ;searchers are turtles who are currently looking for survivours
-breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
+;breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
 
 ;this is a list of the remaining, non-agent owned variables, generally these control the parameters for the simulation
 globals [
@@ -106,6 +106,7 @@ to initTurtles
   ;these operations are perforemed whenever a turtle is created, regardless of breed
   set size uav-Size
   set shape uav-shape
+  set searching TRUE
   create-links-with other turtles [hide-link]
 end
 
@@ -132,12 +133,12 @@ to go
 
 
   ;5. check with base if there is a message in range
-  ask searchers [
+  ask searchers with [searching = TRUE] [
     ifelse resAlive = [] [set color normalColor] [set color foundColor]   
     if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
       ;for the messageBearing UAV, pass the message to base
       foreach resAlive [ ;go through the list of messages to be passed to base
-        if (item 0 ?1) != nobody [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
+        if (item 0 ?1) != nobody and (member? ?1 baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
           ask (item 0 ?1) [
             set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
@@ -154,15 +155,10 @@ to go
             ]
             
             ;If the craft can continue having found someone, change their breed and return them to normal duties
-            if searchersStayAlive [
-              hatch-searchers 1 [
-                set color normalColor
-                initTurtles
-                ]
-            ]
-            ;either way the old craft dies, as it has informed base now
-            die
-             
+            ifelse searchersStayAlive [
+              set searching TRUE
+              set color normalColor
+            ] [die]
           ]
         ]
         
@@ -178,9 +174,9 @@ to go
   ]
   
   ;6. Pass messages between UAVs
-  ask searchers [
+  ask searchers with [searching = TRUE] [
     if resAlive != [] [ ;check if found something, if so executre following
-      ask searchers [ ;try and communicate the message to other nearby UAVS
+      ask other searchers with [searching = TRUE] [ ;try and communicate the message to other nearby UAVS
         if distance-nowrap myself < comRange [;check if they are in range of me
           set color foundColor ;if they are make those UAVs white also
           communicate myself self
@@ -195,21 +191,18 @@ to go
       ] ;if blocked turn a random amount between 0 and 60 degrees
       [uavBehave] ;otherwise execute normal movement code
     
-    if pcolor = victimColor and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
-      hatch-searchersDone 1 [
+    if pcolor = victimColor and (count other searchers-here) < 1 and (random 99 < detectionChance) [
         set color rescueColor
         set resAlive fput (list self pxcor pycor pzcor) resAlive
-        initTurtles
-       ]
-      die
+        set searching FALSE
     ]
     
     
   ]
   
   ;7 Attempt to communicate message from drone who has found victim
-  ask searchersDone [ ;Main loop for those UAVs who have found a victim
-    ask searchers [ ;check for nearby searchers to relay the message to 
+  ask searchers with [searching = FALSE] [ ;Main loop for those UAVs who have found a victim
+    ask searchers with [searching = TRUE] [ ;check for nearby searchers to relay the message to 
       if distance-nowrap myself < comRange ;check if they are in range
       [set color foundColor ;change color to white if in range
         communicate myself self
@@ -564,7 +557,7 @@ population
 population
 1
 100
-24
+19
 1
 1
 NIL
@@ -613,7 +606,7 @@ density
 density
 0
 50
-21
+39
 1
 1
 NIL
