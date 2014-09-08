@@ -1,5 +1,5 @@
 ;Andrew Wright Copyright [2014]
-
+;mac test line
 ;This section is for the decleration of all variables other than locals
 turtles-own [foundNO messageTime resAlive resDead]
 ;foundNO stores the ID of the searcher who found a survivour, the subject of the message
@@ -889,7 +889,7 @@ Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 
 @#$#@#$#@
-NetLogo 3D 5.0.5
+NetLogo 3D 5.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
