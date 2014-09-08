@@ -80,24 +80,35 @@ to setup
   
   ;Initialise the World
   create-searchers population ;create the UAVs
+  
   setupVariables ;Initilise the value of variables and scale of map
   build-rubble ;build the enviroment and place victims
   
   ;Give the turtles their starting characteristics
   ask turtles [
     move-to base
-    set color red
-    set size uav-Size
-    set shape uav-shape
+    set color normalColor
     set messageTime 0
+    initTurtles
     ;make the communication lists empty
     set resAlive []
     set resDead []
-    create-links-with other turtles
   ]
- 
-  
+  ;create one more tutrtle at base, so links can show comunication with base, hide that turtle
+  create-turtles 1 [
+    hide-turtle
+    move-to base
+    initTurtles
+  ]
 end
+
+to initTurtles
+  ;these operations are perforemed whenever a turtle is created, regardless of breed
+  set size uav-Size
+  set shape uav-shape
+  create-links-with other turtles [hide-link]
+end
+
 
 
 ;main program loop, linked to the go button, each 'press' executes this loop once
@@ -125,8 +136,8 @@ to go
     ifelse resAlive = [] [set color normalColor] [set color foundColor]   
     if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
       ;for the messageBearing UAV, pass the message to base
-      foreach resAlive [
-        if (item 0 ?1) != nobody [
+      foreach resAlive [ ;go through the list of messages to be passed to base
+        if (item 0 ?1) != nobody [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
           ask (item 0 ?1) [
             set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
@@ -145,18 +156,23 @@ to go
             if searchersStayAlive [
               hatch-searchers 1 [
                 set color normalColor
-                set size uav-Size
-                set shape uav-shape
-                create-links-with other turtles [hide-link]
+                initTurtles
                 ]
             ]
+            ;either way the old craft dies, as it has informed base now
             die 
           ]
         ]
         
 
       ]
+      ;This is for in range but redundant message
+      ask self [ 
+        set resDead baseResDead
+        set resAlive baseResAlive
+      ]
     ]
+    
   ]
   
   ;3. Pass messages between UAVs
@@ -180,10 +196,8 @@ to go
     if pcolor = blue and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
       hatch-searchersDone 1 [
         set color rescueColor
-        set size uav-Size
-        set shape uav-shape
         set resAlive fput (list self pxcor pycor pzcor) resAlive
-        create-links-with other turtles [hide-link]
+        initTurtles
        ]
       die
     ]
