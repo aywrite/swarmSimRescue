@@ -134,7 +134,7 @@ to go
                 set color normalColor
                 set size uav-Size
                 set shape uav-shape
-                create-links-with other turtles
+                create-links-with other turtles [hide-link]
                 ]
             ]
             die 
@@ -170,7 +170,7 @@ to go
         set size uav-Size
         set shape uav-shape
         set resAlive fput (list self pxcor pycor pzcor) resAlive
-        create-links-with other turtles
+        create-links-with other turtles [hide-link]
        ]
       die
     ]
@@ -453,7 +453,7 @@ to setupVariables
   ;scale
   set patchSize 10
   set ModelHeight 20
-  set worldSize 30
+  set worldSize 50
   
   ;parameters
   set tickLength 0.05
@@ -500,10 +500,10 @@ end
 GRAPHICS-WINDOW
 0
 0
-320
-341
-15
-15
+520
+541
+25
+25
 10.0
 1
 10
@@ -514,10 +514,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--15
-15
--15
-15
+-25
+25
+-25
+25
 -10
 10
 1
@@ -535,7 +535,7 @@ population
 population
 1
 100
-10
+24
 1
 1
 NIL
@@ -968,7 +968,7 @@ Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 
 @#$#@#$#@
-NetLogo 3D 5.1.0
+NetLogo 3D 5.0.5
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
