@@ -1,5 +1,8 @@
-;Copyright 2014 Andrew Wright
-;This code was written under the supervision of John R. Page at the University of New South Wales submited in part for the course AERO4110 Aerospace Design B
+;------------------------------------------------------------------------------
+;                   Copyright 2014 Andrew Wright
+; This code was written under the supervision of John R. Page at the 
+; University of New South Wales submited in part for the course AERO4110 Aerospace Design B
+;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
 ;   You may obtain a copy of the License at
@@ -11,12 +14,18 @@
 ;   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 ;   See the License for the specific language governing permissions and
 ;   limitations under the License.
+;------------------------------------------------------------------------------
+
 
 ;This section is for the decleration of all variables other than locals
 turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife inFlight searching]
+
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
 ;resAlive currently unimplemented lists for the new communication protocol
 ;resDead currently unimplemented lists for the new communication protocol
+;compontentBatteryLife and motorBatteryLife store the life remaining time in seconds for each turtle (the UAVs have seperate batteries for each, so must be tracked seperatley)
+;inFLight stores whether the current UAV is flying or not, since this is simpler than calculating this each time (this may not be needed, update later accordingly)
+
 patches-own [floorHeight roofHeight isSolid]
 ;floorHeight stores the higest point of the floor for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
 ;roofHeight stores the lowest point of the roof for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
