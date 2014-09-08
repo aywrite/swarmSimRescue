@@ -53,6 +53,8 @@ globals [
   
   ;other
   base
+  baseResAlive
+  baseResDead
 ] ;End Variable Decleration
 
 
@@ -75,6 +77,9 @@ to setup
     set shape uav-shape
     set messageTime 0
     set foundNO nobody
+    ;make the communication lists empty
+    set resAlive nobody
+    set resDead nobody
   ]
   
 end
@@ -94,6 +99,9 @@ to go
       ask foundNO [
         set pcolor lime ;indicates that the rescuers now know the location of the victim
         set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
+        ;update the base lists
+        set baseResDead fput (list self pxcor pycor pzcor) baseResDead
+        set baseResAlive remove (list self pxcor pycor pzcor) baseResAlive
         ;this bit is cheaty, can't comm to all at once
         ask searchers [ 
           if foundNO = myself [
@@ -281,6 +289,47 @@ to build-rubble
   ]
 end
 
+to communicate [agent1 agent2]
+  ;need to swap and compare lists with communicating turtle
+  
+  ;extract the lists from the agents, use temporary varaibles
+  let agent1Survivor nobody
+  let agent1Notified nobody
+  let agent2Survivor nobody
+  let agent2Notified nobody
+  ask agent1 [
+    set agent1Survivor resAlive
+    set agent1Notified resDead
+  ]
+  ask agent2 [
+    set agent2Survivor resAlive
+    set agent2Notified resDead
+  ]
+  ;then execute the protocol
+  ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
+  set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
+  set agent1Notified remove-duplicates agent1Notified ;remove duplicates
+  ;2. The survivor lists are combined as in 1.
+  set agent1Survivor sentence agent1Survivor agent2Survivor ;combine the lists
+  set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
+  ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
+  foreach agent1Survivor [
+   if member? ?1 agent1Notified [
+     set agent1Survivor (remove ?1 agent1Survivor)
+   ] 
+  ]
+  ;now redistibute the lists to the agents
+  ask agent1 [
+    set resAlive agent1Survivor 
+    set resDead agent1Notified 
+  ]
+  ask agent2 [
+    set resAlive agent1Survivor 
+    set resDead agent1Notified 
+  ]
+  
+end
+
 to uavBehave
   ifelse color = foundColor and messageTime >= 0
   [
@@ -382,7 +431,7 @@ to setupVariables
   ;scale
   set patchSize 10
   set ModelHeight 20
-  set worldSize 40
+  set worldSize 30
   
   ;parameters
   set tickLength 0.05
@@ -421,10 +470,10 @@ end
 GRAPHICS-WINDOW
 0
 0
-420
-441
-20
-20
+320
+341
+15
+15
 10.0
 1
 10
@@ -435,10 +484,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--20
-20
--20
-20
+-15
+15
+-15
+15
 -10
 10
 1
