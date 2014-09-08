@@ -56,8 +56,10 @@ globals [
   moveDistance
   detectionRange
   visionCone
-  endurance
+  motorEndurance
+  componentEndurance
   comLength
+  lowBatteryThreshold
   
   ;genetics
   searchersStayAlive
@@ -105,6 +107,8 @@ to setup
     ;make the communication lists empty
     set resAlive []
     set resDead []
+    set motorBatteryLife motorEndurance
+    set componentBatteryLife componentEndurance
   ]
   ;create one more tutrtle at base, so links can show comunication with base, hide that turtle
   create-turtles 1 [
@@ -128,8 +132,6 @@ end
 to go
   ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
   if ticks < 1 [reset-perspective] ;STUBB
-  ;2. check if over max flight time
-  if ticks > endurance [stop]
   ;3. if everyone has been found stop the progam
   if not any? patches with [pcolor = victimColor] [stop]
   
@@ -211,6 +213,7 @@ to go
   
   ;7 Attempt to communicate message from drone who has found victim
   ask searchers with [searching = FALSE] [ ;Main loop for those UAVs who have found a victim
+    set componentBatteryLife componentBatteryLife - 1 ;use component power, UAV is landed so no motor Power Required
     ask searchers with [searching = TRUE] [ ;check for nearby searchers to relay the message to 
       if distance-nowrap myself < comRange ;check if they are in range
       [set color foundColor ;change color to white if in range
@@ -345,71 +348,96 @@ to build-rubble
 end
 
 to communicate [agent1 agent2]   ;need to swap and compare lists with communicating turtle
-  ;extract the lists from the agents, use temporary varaibles
-  let agent1Survivor nobody
-  let agent1Notified nobody
-  let agent2Survivor nobody
-  let agent2Notified nobody
-  ask agent1 [
-    set agent1Survivor resAlive
-    set agent1Notified resDead
-  ]
-  ask agent2 [
-    set agent2Survivor resAlive
-    set agent2Notified resDead
-  ]
-  ;then execute the protocol
-  ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
-  set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
-  set agent1Notified remove-duplicates agent1Notified ;remove duplicates
-  ;2. The survivor lists are combined as in 1.
-  set agent1Survivor sentence agent1Survivor agent2Survivor ;combine the lists
-  set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
-  ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
-  foreach agent1Survivor [
-   if member? ?1 agent1Notified [
-     set agent1Survivor (remove ?1 agent1Survivor)
-   ] 
-  ]
-  ;now redistibute the lists to the agents
-  ask agent1 [
-    set resAlive agent1Survivor 
-    set resDead agent1Notified 
-  ]
-  ask agent2 [
-    set resAlive agent1Survivor 
-    set resDead agent1Notified 
-  ]
+  ;check batteryLife (components)
+
+    ;extract the lists from the agents, use temporary varaibles
+    let agent1Survivor nobody
+    let agent1Notified nobody
+    let agent2Survivor nobody
+    let agent2Notified nobody
+    ;also extract battery life
+    let agent1comBatLife 0
+    let agent2comBatLife 0
+    
+    ask agent1 [
+      set agent1Survivor resAlive
+      set agent1Notified resDead
+      set agent1comBatLife componentBatteryLife
+    ]
+    ask agent2 [
+      set agent2Survivor resAlive
+      set agent2Notified resDead
+      set agent2comBatLife componentBatteryLife
+    ]
+    ifelse agent1comBatLife > 0 and agent2comBatLife > 0 [
+    ;then execute the protocol
+    ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
+    set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
+    set agent1Notified remove-duplicates agent1Notified ;remove duplicates
+                                                        ;2. The survivor lists are combined as in 1.
+    set agent1Survivor sentence agent1Survivor agent2Survivor ;combine the lists
+    set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
+                                                        ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
+    foreach agent1Survivor [
+      if member? ?1 agent1Notified [
+        set agent1Survivor (remove ?1 agent1Survivor)
+      ] 
+    ]
+    ;now redistibute the lists to the agents, use up some battery
+    ask agent1 [
+      set resAlive agent1Survivor 
+      set resDead agent1Notified
+      set componentBatteryLife componentBatteryLife - 1 
+    ]
+    ask agent2 [
+      set resAlive agent1Survivor 
+      set resDead agent1Notified
+      set componentBatteryLife componentBatteryLife - 1 
+    ]
+  ] [set color red]
 end
 
 to uavBehave
-  ;If nothing has been found, execute the remaining code
-  ifelse clearPath? [
-    right random turnSize
-    ;adjustPitch
-  ] ;if blocked turn a random amount between 0 and 60 degrees
-  [ ;otherwise execute normal movement code
-    ifelse resAlive != [] and messageTime >= 0 [
-      ;this is for if the UAV is trying to pass on a message
-      if messageTime > comLength [set messageTime (- comLength)]
-      
-    ]
+  ;check battery power
+  ifelse motorBatteryLife > 0 [
+    ;use battery power
+    set componentBatteryLife componentBatteryLife - 1 ;use component power
+    set motorBatteryLife motorBatteryLife - 1 ;use motor power
+    ;if low on power and in range of base, land, this takes priority over movement
     
-    [
-      ;this is the behaviour otherwise
-      ifelse seeVictim != nobody [face seeVictim]
+    ;If nothing has been found, execute the remaining code
+    ifelse clearPath? [
+      right random turnSize
+      ;adjustPitch
+    ] ;if blocked turn a random amount between 0 and 60 degrees
+    [ ;otherwise execute normal movement code
+      ifelse resAlive != [] and messageTime >= 0 [
+        ;this is for if the UAV is trying to pass on a message
+        if messageTime > comLength [set messageTime (- comLength)]
+        
+      ]
+      
       [
+        ;this is the behaviour otherwise
+        ifelse seeVictim != nobody [face seeVictim]
+        [
+          forward moveDistance
+          adjustPitch
+        ]
+        ;default is just to fly forward
         forward moveDistance
         adjustPitch
       ]
-      ;default is just to fly forward
-      forward moveDistance
-      adjustPitch
+      set messageTime (messageTime + 1)
+      
+      ;if the path should be traced, set the space the uav currently occupies to another color
+      ;set pcolor yellow
     ]
-    set messageTime (messageTime + 1)
-    
-    ;if the path should be traced, set the space the uav currently occupies to another color
-    ;set pcolor yellow
+  ] [
+  let ground 0
+  ask patch-here [set ground floorHeight + 1]
+  set color red
+  set zcor ground
   ]
 end
 
@@ -498,8 +526,10 @@ to setupVariables
   set moveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
-  set endurance 30
   set comLength 60
+  set motorEndurance 20
+  set componentEndurance 40
+  set lowBatteryThreshold 0.15
   
   ;genetics
   set searchersStayAlive TRUE
@@ -522,8 +552,9 @@ to setupVariables
   set turnSize turnSize * tickLength
   set sightRange sightRange * tickLength
   set moveDistance moveDistance * tickLength
-  set endurance (endurance * 60) / tickLength
   set comLength comLength / tickLength
+  set motorEndurance (motorEndurance * 60) / tickLength
+  set componentEndurance (componentEndurance * 60) / tickLength
   
   ;other
   set baseResAlive []
