@@ -1,5 +1,4 @@
 ;Andrew Wright Copyright [2014]
-;mac test line
 ;This section is for the decleration of all variables other than locals
 turtles-own [foundNO messageTime resAlive resDead]
 ;foundNO stores the ID of the searcher who found a survivour, the subject of the message
@@ -78,8 +77,8 @@ to setup
     set messageTime 0
     set foundNO nobody
     ;make the communication lists empty
-    set resAlive nobody
-    set resDead nobody
+    set resAlive []
+    set resDead []
   ]
   
 end
@@ -102,6 +101,12 @@ to go
         ;update the base lists
         set baseResDead fput (list self pxcor pycor pzcor) baseResDead
         set baseResAlive remove (list self pxcor pycor pzcor) baseResAlive
+        ;and update the UAV relaying the message's lists with base
+        ask myself [ 
+         set resDead baseResDead
+         set resAlive baseResAlive
+        ]
+        
         ;this bit is cheaty, can't comm to all at once
         ask searchers [ 
           if foundNO = myself [
@@ -109,6 +114,7 @@ to go
             set foundNO nobody
           ]
         ]
+        
         ;end cheaty
         if searchersStayAlive [
         hatch-searchers 1 [
@@ -131,8 +137,10 @@ to go
         [set color foundColor ;if they are make those UAVs white also
           let message nobody ;dummy value of a message, set up to store the ID of the rescue drone
           ask myself [set message foundNO] ;retrive the rescue drone ID
-          set foundNO message] ;store the rescue drone ID in current UAVs memory 
-        ;was linked to previous if statment, ifelse (foundNO != nobody) [if distance foundNO > comRange [set color normalColor]][set color normalColor]] ;make all out of range UAVs red??
+          set foundNO message ;store the rescue drone ID in current UAVs memory
+          communicate myself self
+         ]  
+        
         
       ]
       
@@ -148,7 +156,9 @@ to go
       hatch-searchersDone 1 [
         set color rescueColor
         set size uav-Size
-        set shape uav-shape]
+        set shape uav-shape
+        set resAlive fput (list self pxcor pycor pzcor) resAlive
+       ]
       die
     ]
     
@@ -158,10 +168,12 @@ to go
   ;4 Attempt to communicate message from drone who has found victim
   ask searchersDone [ ;Main loop for those UAVs who have found a victim
     ask searchers [ ;check for nearby searchers to relay the message to 
-      ifelse distance myself < comRange ;check if they are in range
+      if distance myself < comRange ;check if they are in range
       [set color foundColor ;change color to white if in range
-        set foundNO myself] ;pass on rescue message (UAV ID)
-      [];set color red] ; otherwise set color to red
+        set foundNO myself ;pass on rescue message (UAV ID)
+        communicate myself self
+       ] 
+      
     ]
   ]
   ;increment the time counter
@@ -464,6 +476,10 @@ to setupVariables
   set sightRange sightRange * tickLength
   set moveDistance moveDistance * tickLength
   set endurance (endurance * 60) / tickLength
+  
+  ;other
+  set baseResAlive []
+  set baseResDead []
    
 end
 @#$#@#$#@
