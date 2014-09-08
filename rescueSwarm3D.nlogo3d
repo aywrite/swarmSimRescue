@@ -473,10 +473,6 @@ to-report seeVictim
   report whereVictim
 end
 
-to-report inRange?
-  ifelse distance base < comRange [report TRUE] [report FALSE]
-end 
-
 to setupVariables
   ;global trackers
   set rescued 0
