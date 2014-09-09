@@ -168,22 +168,19 @@ to comBase
             ifelse searchersStayAlive [set searching TRUE] [die] ;If the craft can continue having found someone, change their breed and return them to normal duties
           ]
         ]
-        
-
       ]
-      ;Now Send the message to base
+      ;Now exchange lists with base, using communication protocol
       ask self [ask baseTurtles [communicate myself self]]
     ]
-    
   ]
 end
 
-to updateLinks
-    ask links [
-    ask both-ends [ifelse distance-nowrap other-end > comRange [
-      ask myself [hide-link]
+to updateLinks ;this function makes the links between UAVS in range of each other visible
+    ask links [ ;address all links
+    ask both-ends [ifelse distance-nowrap other-end > comRange [ ;check the distance between agents
+      ask myself [hide-link] ;if out of range hide the link
     ][
-    ask myself [show-link]
+    ask myself [show-link] ;if in range make the link visible
     ]
     ]
   ]
@@ -204,127 +201,6 @@ to comUAVs
   ]
 end
  
-to build-rubble
-  ;scale the world
-  set-patch-size patchSize
-  resize-world ( - worldSize / 2) (worldSize / 2) ( - worldSize / 2) (worldSize / 2) (-(modelHeight / 2)) (modelHeight / 2)
-  
-  ;Create a home for the UAVs
-  set base patch 0 (min-pycor + 2) 0 ;set cooridnates for base at the bottom of the map / building entrance
-  
-  ;This code determines the location of the floor and roof the floor
-  ask patches with [pzcor = 0] [
-    set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
-    set roofHeight max-pzcor - abs round ((random-normal 0 1))
-  ]
-  
-  ;main floor and roof building loop
-  ask patches [
-    let tempFloor 0
-    let tempRoof 0
-    set isSolid FALSE
-    ask patch pxcor pycor 0 [set tempFloor floorHeight]
-    ask patch pxcor pycor 0 [set tempRoof RoofHeight]
-    set floorHeight tempFloor
-    set roofHeight tempRoof
-    
-    if pzcor <= floorHeight [
-      set pcolor floorColor
-      set isSolid TRUE
-    ]
-    if pzcor >= roofHeight [
-      set pcolor roofColor
-      set isSolid TRUE
-    ]  
-  ]
-  
-  
-  ;This code generates the Walls 
-  ;make the extreme x and y walls solid (that is the edges of the map) since the world does not wrap
-  ask patches [
-    if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
-    if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
-  ]
-  
-  ;set-up coridors
-  let xrand round random-normal 0 6
-  let yrand round random-normal 0 4
-  
-  ;This generates the wall bases
-  let odds 0
-  ask patches [
-    if pzcor = (floorHeight + 1) [
-      set odds (density)
-      if (pxcor = xrand) or (pxcor = xrand + 1) or (pxcor = xrand - 1) [set odds (odds * 4)]
-      if (pycor = yrand) or (pycor = yrand + 1) or (pycor = yrand - 1) [set odds (odds * 4)]
-      ask neighbors [
-        if pcolor = buildingColor [
-          set odds (round (odds - 1))
-        ]
-      ]
-      ask neighbors4 [
-        if pcolor = buildingColor [
-          set odds (round (odds / 8) - 2)
-        ]
-      ]
-      if count neighbors < 8 [set odds round (odds / 6)]
-      
-      if (random odds = 0) [ 
-        set pcolor buildingColor
-        set isSolid TRUE 
-      ]
-      if random 100 = 0 and isSolid = FALSE [set pcolor victimColor]
-    ]
-  ]
-  
-  
-  ;this Section diminishes the number of isolated wall elements, Should be Deleted?
-  ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 
-    [
-      if pzcor > floorHeight and pzcor < roofHeight [
-        set pcolor black
-        set isSolid FALSE
-      ]
-    ]
-  ]
-  
-  ;this section diminishes the number of patches with excessive thickness, should be Deleted?
-  ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 
-    [
-      if pzcor > floorHeight and pzcor < roofHeight [
-        set pcolor black
-        set isSolid FALSE
-      ]
-    ]
-  ]
-  
-  ;This Code Generates the 3D Walls  
-  ask patches [
-    set odds (0)
-    let stuffhere FALSE
-    ask patch pxcor pycor (floorHeight + 1) [if (pcolor = buildingColor) [set stuffhere TRUE]]
-    if stuffhere = TRUE  [set odds 90]
-    if odds = 90 and pzcor > (floorHeight + 1) [ 
-      set pcolor buildingColor
-      set isSolid TRUE 
-    ]
-  ]
-  
- 
-  ;create the baseplate
-  ;Make sure base is not Located in rubble  
-  ask base [ask neighbors [
-    set pcolor black
-    set isSolid FALSE
-  ]
-  ]
-  ;Make sure base itself is not rubble
-  ask base [
-    set pcolor baseColor
-    set isSolid FALSE
-  ]
-end
-
 to communicate [agent1 agent2]   ;need to swap and compare lists with communicating turtle
   ;Setup temporary variables to store data from agent, for lists
   let agent1Survivor nobody
@@ -522,6 +398,127 @@ to setupVariables
   ;other
   set baseResDead []
    
+end
+
+to build-rubble
+  ;scale the world
+  set-patch-size patchSize
+  resize-world ( - worldSize / 2) (worldSize / 2) ( - worldSize / 2) (worldSize / 2) (-(modelHeight / 2)) (modelHeight / 2)
+  
+  ;Create a home for the UAVs
+  set base patch 0 (min-pycor + 2) 0 ;set cooridnates for base at the bottom of the map / building entrance
+  
+  ;This code determines the location of the floor and roof the floor
+  ask patches with [pzcor = 0] [
+    set floorHeight min-pzcor + abs round (3 * sin (5 * random-normal 0 2) + 3 * cos (5 * random-normal 0 2) + 1 *  sin ((pxcor / min-pxcor) * 90) + (pycor / min-pycor) * 2)
+    set roofHeight max-pzcor - abs round ((random-normal 0 1))
+  ]
+  
+  ;main floor and roof building loop
+  ask patches [
+    let tempFloor 0
+    let tempRoof 0
+    set isSolid FALSE
+    ask patch pxcor pycor 0 [set tempFloor floorHeight]
+    ask patch pxcor pycor 0 [set tempRoof RoofHeight]
+    set floorHeight tempFloor
+    set roofHeight tempRoof
+    
+    if pzcor <= floorHeight [
+      set pcolor floorColor
+      set isSolid TRUE
+    ]
+    if pzcor >= roofHeight [
+      set pcolor roofColor
+      set isSolid TRUE
+    ]  
+  ]
+  
+  
+  ;This code generates the Walls 
+  ;make the extreme x and y walls solid (that is the edges of the map) since the world does not wrap
+  ask patches [
+    if pxcor = min-pxcor or pxcor = max-pxcor [set isSolid TRUE] 
+    if pycor = min-pycor or pycor = max-pycor [set isSolid TRUE] 
+  ]
+  
+  ;set-up coridors
+  let xrand round random-normal 0 6
+  let yrand round random-normal 0 4
+  
+  ;This generates the wall bases
+  let odds 0
+  ask patches [
+    if pzcor = (floorHeight + 1) [
+      set odds (density)
+      if (pxcor = xrand) or (pxcor = xrand + 1) or (pxcor = xrand - 1) [set odds (odds * 4)]
+      if (pycor = yrand) or (pycor = yrand + 1) or (pycor = yrand - 1) [set odds (odds * 4)]
+      ask neighbors [
+        if pcolor = buildingColor [
+          set odds (round (odds - 1))
+        ]
+      ]
+      ask neighbors4 [
+        if pcolor = buildingColor [
+          set odds (round (odds / 8) - 2)
+        ]
+      ]
+      if count neighbors < 8 [set odds round (odds / 6)]
+      
+      if (random odds = 0) [ 
+        set pcolor buildingColor
+        set isSolid TRUE 
+      ]
+      if random 100 = 0 and isSolid = FALSE [set pcolor victimColor]
+    ]
+  ]
+  
+  
+  ;this Section diminishes the number of isolated wall elements, Should be Deleted?
+  ask patches [if (count neighbors with [pcolor = buildingColor] < 1) and random (density / 2) = 0 
+    [
+      if pzcor > floorHeight and pzcor < roofHeight [
+        set pcolor black
+        set isSolid FALSE
+      ]
+    ]
+  ]
+  
+  ;this section diminishes the number of patches with excessive thickness, should be Deleted?
+  ask patches [if (count neighbors with [pcolor = buildingColor] > 3) and random (2) = 0 
+    [
+      if pzcor > floorHeight and pzcor < roofHeight [
+        set pcolor black
+        set isSolid FALSE
+      ]
+    ]
+  ]
+  
+  ;This Code Generates the 3D Walls  
+  ask patches [
+    set odds (0)
+    let stuffhere FALSE
+    ask patch pxcor pycor (floorHeight + 1) [if (pcolor = buildingColor) [set stuffhere TRUE]]
+    if stuffhere = TRUE  [set odds 90]
+    if odds = 90 and pzcor > (floorHeight + 1) [ 
+      set pcolor buildingColor
+      set isSolid TRUE 
+    ]
+  ]
+  
+ 
+  ;create the baseplate
+  ;Make sure base is not Located in rubble  
+  ask base [ask neighbors [
+    set pcolor black
+    set isSolid FALSE
+  ]
+  ]
+  ;Make sure base itself is not rubble
+  ask base [
+    set pcolor baseColor
+    set isSolid FALSE
+  ]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
