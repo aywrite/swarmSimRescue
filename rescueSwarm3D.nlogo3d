@@ -199,11 +199,12 @@ to updateLinks
     ]
     ]
   ]
-  
 end
 
 to comUAVs
-    ask searchers [
+  ask searchers [
+    if componentBatteryLife > 0 [
+      set componentBatteryLife componentBatteryLife - 1 ;use component battery power
       if resAlive != [] or searching = FALSE [
         ask other searchers[
           if distance-nowrap myself < comRange [;check if they are in range of me
@@ -212,6 +213,7 @@ to comUAVs
         ]
       ]
     ]
+  ]
 end
  
 to build-rubble
@@ -343,21 +345,21 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
   let agent2Survivor nobody
   let agent2Notified nobody
   ;also for battery life
-  let agent1comBatLife 0
-  let agent2comBatLife 0
+;  let agent1comBatLife 0
+;  let agent2comBatLife 0
   ;extract the infomation (lists and battery life from the agents
   ask agent1 [
     set agent1Survivor resAlive
     set agent1Notified resDead
-    set agent1comBatLife componentBatteryLife
+    ;set agent1comBatLife componentBatteryLife
   ]
   ask agent2 [
     set agent2Survivor resAlive
     set agent2Notified resDead
-    set agent2comBatLife componentBatteryLife
+    ;set agent2comBatLife componentBatteryLife
   ]
   ;now check if the agents have enough battery to comunicate, if so proceed
-  if agent1comBatLife > 0 and agent2comBatLife > 0 [
+  ;if agent1comBatLife > 0 and agent2comBatLife > 0 [
     ;then execute the protocol
     ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
     set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
@@ -371,25 +373,22 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
         set agent1Survivor (remove ?1 agent1Survivor)
       ] 
     ]
-    ;now redistibute the lists to the agents, use up some battery
+    ;now redistibute the lists to the agents
     ask agent1 [
       set resAlive agent1Survivor 
       set resDead agent1Notified
-      ;if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
     ]
     ask agent2 [
       set resAlive agent1Survivor 
       set resDead agent1Notified
-      ;if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
     ]
-  ]
+  ;]
 end
 
 to uavBehave
   ask searchers with [searching = TRUE] [
     ;check battery power
     ifelse motorBatteryLife > 0 [
-      set componentBatteryLife componentBatteryLife - 1 ;use component battery power
       
       ;This is the for those who have found a victim
       if pcolor = victimColor and (count other searchers-here) < 1 and (random 100 < detectionChance) [
@@ -424,7 +423,6 @@ to uavBehave
     ask patch-here [set ground floorHeight + 1]
     set color red
     set zcor ground
-    set componentBatteryLife componentBatteryLife - 1 ;use component power
     ]
   ]
 end
@@ -637,7 +635,7 @@ density
 density
 0
 50
-50
+27
 1
 1
 NIL
