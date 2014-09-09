@@ -35,6 +35,7 @@ patches-own [floorHeight roofHeight isSolid]
 
 ;The following section, <breeds>, declares sub-sets of the original turtle population
 breed [searchers uav] ;searchers are turtles who are currently looking for survivours
+breed [baseTurtles baseTurtle] ;this is a dummy turtle used at base
 ;breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
 
 ;this is a list of the remaining, non-agent owned variables, generally these control the parameters for the simulation
@@ -80,7 +81,6 @@ globals [
   
   ;other
   base
-  baseResAlive
   baseResDead
 ] 
 ;-----End Variable Decleration-----
@@ -134,26 +134,28 @@ to go
   ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
   if ticks < 1 [reset-perspective] ;STUBB
   ;3. if everyone has been found stop the progam
-  if not any? patches with [pcolor = victimColor] [stop]
+  ;if not any? patches with [pcolor = victimColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
   updateLinks
   ;refresh the graphics window, then hold all other updates until next iteration
-  display
-  no-display
+  ask searchers [
+  ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
+  ]
+  ;display
+  ;no-display
   ;5. check with base if there is a message in range
   comBase
   ;6. Pass messages between UAVs
   comUAVs
   ;execute uav movment behaviour
-  uavBehave
+  ask searchers with [searching = TRUE] [uavBehave]
   ;increment the time counter
   tick
 end
 
 to comBase
-    ask searchers with [searching = TRUE] [
-    ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.  
+    ask searchers with [searching = TRUE] [  
     if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
       ;for the messageBearing UAV, pass the message to base
       foreach resAlive [ ;go through the list of messages to be passed to base
@@ -163,28 +165,17 @@ to comBase
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
             ;update the base lists
             set baseResDead fput (list self pxcor pycor pzcor) baseResDead
-            set baseResAlive remove (list self pxcor pycor pzcor) baseResAlive
             ;remove duplicates from the base list
-            set baseResDead remove-duplicates baseResDead
-            set baseResAlive remove-duplicates baseResDead
-            ;and update the UAV relaying the message's lists with base
-            ask myself [ 
-              set resDead baseResDead
-              set resAlive baseResAlive
-            ]
-            
-            ;If the craft can continue having found someone, change their breed and return them to normal duties
-            ifelse searchersStayAlive [set searching TRUE] [die]
+            ;set baseResDead remove-duplicates baseResDead
+            ask baseTurtles [set resDead baseResDead] ;pass this to the base turtle, ready for communication
+            ifelse searchersStayAlive [set searching TRUE] [die] ;If the craft can continue having found someone, change their breed and return them to normal duties
           ]
         ]
         
 
       ]
-      ;This is for in range but redundant message
-      ask self [ 
-        set resDead baseResDead
-        set resAlive baseResAlive
-      ]
+      ;Now Send the message to base
+      ask self [ask baseTurtles [communicate myself self]]
     ]
     
   ]
@@ -386,12 +377,11 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
 end
 
 to uavBehave
-  ask searchers with [searching = TRUE] [
     ;check battery power
     ifelse motorBatteryLife > 0 [
       
       ;This is the for those who have found a victim
-      if pcolor = victimColor and (count other searchers-here) < 1 and (random 100 < detectionChance) [
+      if pcolor = victimColor and (count other searchers-here) < 1 [
         set resAlive fput (list self pxcor pycor pzcor) resAlive
         set searching FALSE
       ]
@@ -408,23 +398,19 @@ to uavBehave
       [;-----if everything is working, attempt to behave as normal-----
         set motorBatteryLife motorBatteryLife - 1 ;use motor power
         ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
-        [ ;otherwise execute normal movement code
-          ifelse resAlive != [] and messageTime >= 0 [if messageTime > comLength [set messageTime (- comLength)]] ;this is for if the UAV is trying to pass on a message
-          [ ;this is the behaviour otherwise
+        [ 
             if seeVictim != nobody [face seeVictim]
             forward moveDistance
             adjustPitch
-          ]
-          set messageTime (messageTime + 1)
         ]
       ] ;-----end normal behaviour-----
+      
     ] [
     let ground 0
     ask patch-here [set ground floorHeight + 1]
     set color red
     set zcor ground
     ]
-  ]
 end
 
 to adjustPitch
@@ -461,6 +447,7 @@ end
 
 to-report seeVictim
   let whereVictim nobody
+  ifelse random 100 < detectionChance [
   let target-patch1 patch-ahead detectionRange
   ask target-patch1 [
     ask patch pxcor pycor (floorHeight + 1) [
@@ -490,7 +477,7 @@ to-report seeVictim
       set whereVictim self
     ]
   ]
-  
+  ] [set whereVictim patch-ahead 1]
   report whereVictim
 end
 
@@ -543,7 +530,6 @@ to setupVariables
   set componentEndurance (componentEndurance * 60) / tickLength
   
   ;other
-  set baseResAlive []
   set baseResDead []
    
 end
@@ -661,11 +647,29 @@ detectionChance
 detectionChance
 0
 100
-98
+100
 1
 1
 NIL
 HORIZONTAL
+
+PLOT
+238
+117
+660
+456
+Victims Found
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot rescued"
 
 @#$#@#$#@
 ## WHAT IS IT?
