@@ -53,7 +53,6 @@ globals [
   uav-shape
   UAV-size
   sightRange
-  comRange
   standardMoveDistance
   detectionRange
   visionCone
@@ -141,7 +140,7 @@ to go
   ;2 run the program for twice the maximum flight time, assume everyone is out of battery by now
   if ticks > motorEndurance * 2 [stop]
   ;3. if everyone has been found stop the progam
-  if not any? patches with [pcolor = victimColor] [stop]
+  if not any? patches with [pcolor = victimColor] and not any? patches with [pcolor = victimLocatedColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
   updateLinks
@@ -151,7 +150,7 @@ to go
   ;6. Pass messages between UAVs
   comUAVs
   ;execute uav movment behaviour
-  ask searchers with [searching = TRUE] [uavBehave]
+  ask searchers with [searching = TRUE] [if ticks > who / tickLength [uavBehave]]
   ;refresh the graphics window, then hold all other updates until next iteration
   ask searchers [ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
   display
@@ -252,9 +251,9 @@ to uavBehave
   ;First setup the swarm parameters that will govern behavour
   if swarmBehaviour = TRUE [
   ask other searchers [
-    ifelse distance myself < (comRange / 2) and who mod 2 = 0 [
-      set turnSize (- turnSize)
-      set moveDistance moveDistance / 2
+    ifelse distance myself < (comRange / 2) [
+      if who mod 2 = 0 [set turnSize (- standardTurnSize)]
+      set moveDistance standardMoveDistance / (who + 1)
     ] [
       set turnSize standardTurnSize
       set moveDistance standardMoveDistance
@@ -313,15 +312,15 @@ end
 to-report clearPath?
   let blocked FALSE
   let target-patch1 patch-ahead sightRange
-  if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count turtles-on target-patch1 > 0 and turtleColision = TRUE) [
+  if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count other turtles-on target-patch1 > 0 and turtleColision = TRUE and patch-here != base) [
     set blocked TRUE
   ]
   let target-patch2 patch-right-and-ahead 30 sightRange
-  if target-patch2 = nobody or [isSolid] of target-patch2 = TRUE or (count turtles-on target-patch2 > 0 and turtleColision = TRUE)[
+  if target-patch2 = nobody or [isSolid] of target-patch2 = TRUE or (count other turtles-on target-patch2 > 0 and turtleColision = TRUE and patch-here != base)[
     set blocked TRUE
   ]
   let target-patch3 patch-left-and-ahead 30 sightRange
-  if target-patch3 = nobody or [isSolid] of target-patch3 = TRUE or (count turtles-on target-patch3 > 0 and turtleColision = TRUE)[
+  if target-patch3 = nobody or [isSolid] of target-patch3 = TRUE or (count other turtles-on target-patch3 > 0 and turtleColision = TRUE and patch-here != base)[
     set blocked TRUE
   ]
   report blocked
@@ -390,7 +389,7 @@ to setupVariables
   set uav-shape "orbit 4"
   set UAV-size 1
   set sightRange 2
-  set comRange 10
+  ;set comRange 10
   set standardMoveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
@@ -639,7 +638,7 @@ density
 density
 0
 50
-15
+6
 1
 1
 NIL
@@ -680,7 +679,7 @@ turnSizeSlider
 turnSizeSlider
 0
 360
-62
+174
 1
 1
 NIL
@@ -696,6 +695,21 @@ totalVictims
 0
 1
 11
+
+SLIDER
+1119
+226
+1291
+259
+comRange
+comRange
+0
+100
+0
+0.5
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1057,10 +1071,23 @@ NetLogo 3D 5.0.5
   <experiment name="turnSizeExperiment" repetitions="3" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
-    <exitCondition>ticks &gt; 40000 or rescued &gt; totalVictims</exitCondition>
+    <exitCondition>ticks &gt; 30000 or rescued &gt; totalVictims</exitCondition>
     <metric>rescued</metric>
     <metric>totalVictims</metric>
     <steppedValueSet variable="turnSizeSlider" first="0" step="2" last="180"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="comRangeExperiment" repetitions="5" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 25000 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="comRange" first="0.5" step="0.5" last="20"/>
+    <steppedValueSet variable="density" first="5" step="1" last="40"/>
     <enumeratedValueSet variable="swarmBehaviour">
       <value value="false"/>
       <value value="true"/>
