@@ -25,7 +25,6 @@ turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife 
 ;resDead stores the notified list, that is those victims who have been located and that base has been informed of, according to the UAV curating the list
 ;Both resAlive and resDead store the infomation as a list of lists, where the sublist is of the format [UAV_ID x-cor y-cor z-cor] with infomation pertaining to the UAV who found a person, not the UAV who owns the list
 ;compontentBatteryLife and motorBatteryLife store the life remaining time in seconds for each turtle (the UAVs have seperate batteries for each, so must be tracked seperatley)
-;inFLight stores whether the current UAV is flying or not, since this is simpler than calculating this each time (this may not be needed, update later accordingly)
 ;searching BOOLEAN, stores whether a UAV is activley looking or has currently found someone and is waiting to relay the message to base
 
 patches-own [floorHeight roofHeight isSolid]
@@ -102,7 +101,7 @@ to setup
   ask turtles [
     move-to base
     set color normalColor
-    set messageTime 0
+    ;set messageTime 0
     initTurtles
     ;make the communication lists empty
     set resAlive []
@@ -111,9 +110,11 @@ to setup
     set componentBatteryLife componentEndurance
   ]
   ;create one more tutrtle at base, so links can show comunication with base, hide that turtle
-  create-turtles 1 [
+  create-baseTurtles 1 [
     hide-turtle
     move-to base
+    set resAlive []
+    set resDead []
     create-links-with other turtles [hide-link]
   ]
 end
@@ -138,18 +139,19 @@ to go
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
   updateLinks
-  ;refresh the graphics window, then hold all other updates until next iteration
-  ask searchers [
-  ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
-  ]
-  ;display
-  ;no-display
+
   ;5. check with base if there is a message in range
   comBase
   ;6. Pass messages between UAVs
   comUAVs
   ;execute uav movment behaviour
   ask searchers with [searching = TRUE] [uavBehave]
+  ;refresh the graphics window, then hold all other updates until next iteration
+  ask searchers [
+    ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
+  ]
+  ;display
+  ;no-display
   ;increment the time counter
   tick
 end
@@ -159,14 +161,12 @@ to comBase
     if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
       ;for the messageBearing UAV, pass the message to base
       foreach resAlive [ ;go through the list of messages to be passed to base
-        if (item 0 ?1) != nobody and (member? ?1 baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
-          ask (item 0 ?1) [
+        let searcherDone (item 0 ?)
+        if searcherDone != nobody and (member? ? baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
+          ask searcherDone [
             set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
-            ;update the base lists
-            set baseResDead fput (list self pxcor pycor pzcor) baseResDead
-            ;remove duplicates from the base list
-            ;set baseResDead remove-duplicates baseResDead
+            set baseResDead fput (list self pxcor pycor pzcor) baseResDead ;update the base lists
             ask baseTurtles [set resDead baseResDead] ;pass this to the base turtle, ready for communication
             ifelse searchersStayAlive [set searching TRUE] [die] ;If the craft can continue having found someone, change their breed and return them to normal duties
           ]
@@ -329,28 +329,21 @@ to build-rubble
 end
 
 to communicate [agent1 agent2]   ;need to swap and compare lists with communicating turtle
-  ;Setup temporary variables to store data from agents
-  ;for lists
+  ;Setup temporary variables to store data from agent, for lists
   let agent1Survivor nobody
   let agent1Notified nobody
   let agent2Survivor nobody
   let agent2Notified nobody
-  ;also for battery life
-;  let agent1comBatLife 0
-;  let agent2comBatLife 0
+
   ;extract the infomation (lists and battery life from the agents
   ask agent1 [
     set agent1Survivor resAlive
     set agent1Notified resDead
-    ;set agent1comBatLife componentBatteryLife
   ]
   ask agent2 [
     set agent2Survivor resAlive
     set agent2Notified resDead
-    ;set agent2comBatLife componentBatteryLife
   ]
-  ;now check if the agents have enough battery to comunicate, if so proceed
-  ;if agent1comBatLife > 0 and agent2comBatLife > 0 [
     ;then execute the protocol
     ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
     set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
@@ -360,8 +353,8 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
     set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
     ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
     foreach agent1Survivor [
-      if member? ?1 agent1Notified [
-        set agent1Survivor (remove ?1 agent1Survivor)
+      if member? ? agent1Notified [
+        set agent1Survivor (remove ? agent1Survivor)
       ] 
     ]
     ;now redistibute the lists to the agents
@@ -373,7 +366,6 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
       set resAlive agent1Survivor 
       set resDead agent1Notified
     ]
-  ;]
 end
 
 to uavBehave
@@ -488,14 +480,14 @@ to setupVariables
   ;scale
   set patchSize 10
   set ModelHeight 20
-  set worldSize 30
+  set worldSize 40
   
   ;parameters
   set tickLength 0.05
   set uav-shape "orbit 4"
   set UAV-size 1
   set sightRange 2
-  set comRange 7
+  set comRange 10
   set moveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
@@ -537,10 +529,10 @@ end
 GRAPHICS-WINDOW
 0
 0
-320
-341
-15
-15
+420
+441
+20
+20
 10.0
 1
 10
@@ -551,10 +543,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--15
-15
--15
-15
+-20
+20
+-20
+20
 -10
 10
 1
@@ -572,7 +564,7 @@ population
 population
 1
 100
-12
+15
 1
 1
 NIL
