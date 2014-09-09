@@ -18,7 +18,7 @@
 
 
 ;-----This section is for the decleration of all variables other than locals-----
-turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife inFlight searching]
+turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife searching moveDistance turnSize]
 
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
 ;resAlive stores the survivor list, that is those that victims that have been found but that base has not yet been informed of, according to the UAV curating the list
@@ -53,7 +53,7 @@ globals [
   UAV-size
   sightRange
   comRange
-  moveDistance
+  standardMoveDistance
   detectionRange
   visionCone
   motorEndurance
@@ -64,7 +64,7 @@ globals [
   ;genetics
   searchersStayAlive
   turtleColision
-  turnSize
+  standardTurnSize
   
   ;colors
   baseColor
@@ -86,9 +86,10 @@ globals [
 
 ;setup function, run at the begining of each simulation
 to setup
-  ;reset the state and time
+  ;reset the state, time and view
   clear-all
   reset-ticks
+  reset-perspective
   
   ;Initialise the World
   create-searchers population ;create the UAVs
@@ -122,6 +123,8 @@ to initTurtles
   ;these operations are perforemed whenever a turtle is created, regardless of breed
   set size uav-Size
   set shape uav-shape
+  set turnSize standardTurnSize
+  set moveDistance standardMoveDistance
   set searching TRUE
   create-links-with other turtles [hide-link]
 end
@@ -242,41 +245,51 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
 end
 
 to uavBehave
-    ;check battery power
-    ifelse motorBatteryLife > 0 [
-      
-      ;This is the for those who have found a victim
-      if pcolor = victimColor and (count other searchers-here) < 1 [
-        set resAlive fput (list self pxcor pycor pzcor) resAlive
-        set searching FALSE
-      ]
-      
-      ;if low on power and in range of base, land, this takes priority over movement
-      ifelse distance-nowrap base < comRange and (componentBatteryLife < lowBatteryThreshold * componentEndurance or motorBatteryLife < lowBatteryThreshold * motorEndurance) [
-        let ground 0
-        ask patch-here [set ground floorHeight + 1]
-        if zcor > ground [ 
-          set zcor zcor - moveDistance
-        ]
-      ]
-      
-      [;-----if everything is working, attempt to behave as normal-----
-        set motorBatteryLife motorBatteryLife - 1 ;use motor power
-        ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
-        [ 
-            let victimLocation seeVictim
-            if victimLocation != nobody [face victimLocation]
-            forward moveDistance
-            adjustPitch
-        ]
-      ] ;-----end normal behaviour-----
-      
+  ;First setup the swarm parameters that will govern behavour
+  ask other searchers [
+    ifelse distance myself < (comRange / 2) and who mod 2 = 0 [
+      set turnSize (- turnSize)
+      set moveDistance moveDistance / 2
     ] [
-    let ground 0
-    ask patch-here [set ground floorHeight + 1]
-    set color red
-    set zcor ground
+      set turnSize standardTurnSize
+      set moveDistance standardMoveDistance
     ]
+  ] 
+  ;check battery power
+  ifelse motorBatteryLife > 0 [
+    
+    ;This is the for those who have found a victim
+    if pcolor = victimColor and (count other searchers-here) < 1 [
+      set resAlive fput (list self pxcor pycor pzcor) resAlive
+      set searching FALSE
+    ]
+    
+    ;if low on power and in range of base, land, this takes priority over movement
+    ifelse distance-nowrap base < comRange and (componentBatteryLife < lowBatteryThreshold * componentEndurance or motorBatteryLife < lowBatteryThreshold * motorEndurance) [
+      let ground 0
+      ask patch-here [set ground floorHeight + 1]
+      if zcor > ground [ 
+        set zcor zcor - moveDistance
+      ]
+    ]
+    
+    [;-----if everything is working, attempt to behave as normal-----
+      set motorBatteryLife motorBatteryLife - 1 ;use motor power
+      ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
+        [ 
+          let victimLocation seeVictim
+          if victimLocation != nobody [face victimLocation]
+          forward moveDistance
+          adjustPitch
+        ]
+    ] ;-----end normal behaviour-----
+    
+  ] [
+  let ground 0
+  ask patch-here [set ground floorHeight + 1]
+  set color red
+  set zcor ground
+  ]
 end
 
 to adjustPitch
@@ -362,7 +375,7 @@ to setupVariables
   set UAV-size 1
   set sightRange 2
   set comRange 10
-  set moveDistance 1.5
+  set standardMoveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
   set comLength 60
@@ -373,7 +386,7 @@ to setupVariables
   ;genetics
   set searchersStayAlive TRUE
   set turtleColision FALSE
-  set turnSize 60
+  set standardTurnSize 60
   
   ;colors
   set foundColor white
@@ -388,9 +401,9 @@ to setupVariables
   set roofColor [100 100 100 10]
   
   ;Now Scale any variables which need it
-  set turnSize turnSize * tickLength
+  set standardTurnSize standardTurnSize ;* tickLength
   set sightRange sightRange * tickLength
-  set moveDistance moveDistance * tickLength
+  set standardMoveDistance standardMoveDistance * tickLength
   set comLength comLength / tickLength
   set motorEndurance (motorEndurance * 60) / tickLength
   set componentEndurance (componentEndurance * 60) / tickLength
@@ -608,7 +621,7 @@ density
 density
 0
 50
-27
+10
 1
 1
 NIL
@@ -634,7 +647,7 @@ detectionChance
 detectionChance
 0
 100
-50
+100
 1
 1
 NIL
