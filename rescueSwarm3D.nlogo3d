@@ -41,6 +41,7 @@ breed [baseTurtles baseTurtle] ;this is a dummy turtle used at base
 globals [
   ;global trackers
   rescued
+  totalVictims
   
   ;scale
   patchSize
@@ -65,6 +66,7 @@ globals [
   searchersStayAlive
   turtleColision
   standardTurnSize
+  swarmBehaviour
   
   ;colors
   baseColor
@@ -117,6 +119,7 @@ to setup
     set resDead []
     create-links-with other turtles [hide-link]
   ]
+  set totalVictims (count patches with [pcolor = victimColor])
 end
 
 to initTurtles
@@ -246,6 +249,7 @@ end
 
 to uavBehave
   ;First setup the swarm parameters that will govern behavour
+  if swarmBehaviour = TRUE [
   ask other searchers [
     ifelse distance myself < (comRange / 2) and who mod 2 = 0 [
       set turnSize (- turnSize)
@@ -254,6 +258,7 @@ to uavBehave
       set turnSize standardTurnSize
       set moveDistance standardMoveDistance
     ]
+  ]
   ] 
   ;check battery power
   ifelse motorBatteryLife > 0 [
@@ -278,9 +283,11 @@ to uavBehave
       ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
         [ 
           let victimLocation seeVictim
-          if victimLocation != nobody [face victimLocation]
-          forward moveDistance
-          adjustPitch
+          if victimLocation != nobody [set zcor zcor - moveDistance]
+          
+          ifelse (zcor < (floorHeight + 2)) [set zcor zcor + moveDistance] [
+            adjustPitch
+            forward moveDistance]
         ]
     ] ;-----end normal behaviour-----
     
@@ -327,30 +334,30 @@ end
 to-report seeVictim
   let whereVictim nobody
   if random 100 < detectionChance [
-  let target-patch1 patch-ahead detectionRange
-  ask target-patch1 [
-    ask patch pxcor pycor (floorHeight + 1) [
-      if [pcolor] of self = victimColor and count turtles-here < 1 [
-        set whereVictim self
-      ]
-    ]
-  ]
-  let target-patch2 patch-right-and-ahead (visionCone / 2) detectionRange
-  ask target-patch2 [
-    ask patch pxcor pycor (floorHeight + 1) [
-      if [pcolor] of self = victimColor and count turtles-here < 1 [
-        set whereVictim self
-      ]
-    ]
-  ]
-  let target-patch3 patch-left-and-ahead (visionCone / 2) detectionRange
-  ask target-patch2 [
-    ask patch pxcor pycor (floorHeight + 1)[
-      if [pcolor] of self = victimColor and count turtles-here < 1 [
-        set whereVictim self
-      ]
-    ]
-  ]
+;  let target-patch1 patch-ahead detectionRange
+;  ask target-patch1 [
+;    ask patch pxcor pycor (floorHeight + 1) [
+;      if [pcolor] of self = victimColor and count turtles-here < 1 [
+;        set whereVictim self
+;      ]
+;    ]
+;  ]
+;  let target-patch2 patch-right-and-ahead (visionCone / 2) detectionRange
+;  ask target-patch2 [
+;    ask patch pxcor pycor (floorHeight + 1) [
+;      if [pcolor] of self = victimColor and count turtles-here < 1 [
+;        set whereVictim self
+;      ]
+;    ]
+;  ]
+;  let target-patch3 patch-left-and-ahead (visionCone / 2) detectionRange
+;  ask target-patch2 [
+;    ask patch pxcor pycor (floorHeight + 1)[
+;      if [pcolor] of self = victimColor and count turtles-here < 1 [
+;        set whereVictim self
+;      ]
+;    ]
+;  ]
   ask patch pxcor pycor (floorHeight + 1) [
     if [pcolor] of self = victimColor and count turtles-here < 1 [
       set whereVictim self
@@ -363,6 +370,7 @@ end
 to setupVariables
   ;global trackers
   set rescued 0
+
   
   ;scale
   set patchSize 10
@@ -386,7 +394,8 @@ to setupVariables
   ;genetics
   set searchersStayAlive TRUE
   set turtleColision FALSE
-  set standardTurnSize 60
+  set standardTurnSize turnSizeSlider
+  set swarmBehaviour TRUE
   
   ;colors
   set foundColor white
@@ -621,7 +630,7 @@ density
 density
 0
 50
-10
+23
 1
 1
 NIL
@@ -653,23 +662,31 @@ detectionChance
 NIL
 HORIZONTAL
 
-PLOT
-238
-117
-660
-456
-Victims Found
+SLIDER
+1078
+153
+1250
+186
+turnSizeSlider
+turnSizeSlider
+0
+360
+62
+1
+1
 NIL
-NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot rescued"
+HORIZONTAL
+
+MONITOR
+977
+70
+1058
+115
+Total Victims
+totalVictims
+0
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1027,6 +1044,20 @@ NetLogo 3D 5.0.5
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="turnSizeExperiment" repetitions="3" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 40000 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="turnSizeSlider" first="0" step="2" last="180"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
