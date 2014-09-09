@@ -386,7 +386,8 @@ to uavBehave
         set motorBatteryLife motorBatteryLife - 1 ;use motor power
         ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
         [ 
-            if seeVictim != nobody [face seeVictim]
+            let victimLocation seeVictim
+            if victimLocation != nobody [face victimLocation]
             forward moveDistance
             adjustPitch
         ]
@@ -434,7 +435,7 @@ end
 
 to-report seeVictim
   let whereVictim nobody
-  ifelse random 100 < detectionChance [
+  if random 100 < detectionChance [
   let target-patch1 patch-ahead detectionRange
   ask target-patch1 [
     ask patch pxcor pycor (floorHeight + 1) [
@@ -464,7 +465,7 @@ to-report seeVictim
       set whereVictim self
     ]
   ]
-  ] [set whereVictim patch-ahead 1]
+  ]
   report whereVictim
 end
 
