@@ -1,5 +1,8 @@
-;Copyright 2014 Andrew Wright
-;This code was written under the supervision of John R. Page at the University of New South Wales submited in part for the course AERO4110 Aerospace Design B
+;------------------------------------------------------------------------------
+;                   Copyright 2014 Andrew Wright
+; This code was written under the supervision of John R. Page at the 
+; University of New South Wales submited in part for the course AERO4110 Aerospace Design B
+;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
 ;   You may obtain a copy of the License at
@@ -11,12 +14,19 @@
 ;   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 ;   See the License for the specific language governing permissions and
 ;   limitations under the License.
+;------------------------------------------------------------------------------
 
-;This section is for the decleration of all variables other than locals
-turtles-own [messageTime resAlive resDead]
+
+;-----This section is for the decleration of all variables other than locals-----
+turtles-own [messageTime resAlive resDead componentBatteryLife motorBatteryLife inFlight searching]
+
 ;messageTime stores the amount of time the searcher has spent communicating, this is important for battery life and search optimisation
-;resAlive currently unimplemented lists for the new communication protocol
-;resDead currently unimplemented lists for the new communication protocol
+;resAlive stores the survivor list, that is those that victims that have been found but that base has not yet been informed of, according to the UAV curating the list
+;resDead stores the notified list, that is those victims who have been located and that base has been informed of, according to the UAV curating the list
+;Both resAlive and resDead store the infomation as a list of lists, where the sublist is of the format [UAV_ID x-cor y-cor z-cor] with infomation pertaining to the UAV who found a person, not the UAV who owns the list
+;compontentBatteryLife and motorBatteryLife store the life remaining time in seconds for each turtle (the UAVs have seperate batteries for each, so must be tracked seperatley)
+;searching BOOLEAN, stores whether a UAV is activley looking or has currently found someone and is waiting to relay the message to base
+
 patches-own [floorHeight roofHeight isSolid]
 ;floorHeight stores the higest point of the floor for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
 ;roofHeight stores the lowest point of the roof for each patch along the same x-y locationn/z-coloum, each patch needs to be able to access this themselves
@@ -24,7 +34,8 @@ patches-own [floorHeight roofHeight isSolid]
 
 ;The following section, <breeds>, declares sub-sets of the original turtle population
 breed [searchers uav] ;searchers are turtles who are currently looking for survivours
-breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
+breed [baseTurtles baseTurtle] ;this is a dummy turtle used at base
+;breed [searchersDone uav] ;seachersDone are turtles who have located a survivour (not searchers who are aware that another has done so)
 
 ;this is a list of the remaining, non-agent owned variables, generally these control the parameters for the simulation
 globals [
@@ -45,8 +56,10 @@ globals [
   moveDistance
   detectionRange
   visionCone
-  endurance
+  motorEndurance
+  componentEndurance
   comLength
+  lowBatteryThreshold
   
   ;genetics
   searchersStayAlive
@@ -58,7 +71,7 @@ globals [
   foundColor
   normalColor
   buildingColor
-  rescueColor
+  ;rescueColor
   victimColor
   victimFoundColor
   floorColor
@@ -67,10 +80,9 @@ globals [
   
   ;other
   base
-  baseResAlive
   baseResDead
-] ;End Variable Decleration
-
+] 
+;-----End Variable Decleration-----
 
 ;setup function, run at the begining of each simulation
 to setup
@@ -88,17 +100,21 @@ to setup
   ask turtles [
     move-to base
     set color normalColor
-    set messageTime 0
+    ;set messageTime 0
     initTurtles
     ;make the communication lists empty
     set resAlive []
     set resDead []
+    set motorBatteryLife motorEndurance
+    set componentBatteryLife componentEndurance
   ]
   ;create one more tutrtle at base, so links can show comunication with base, hide that turtle
-  create-turtles 1 [
+  create-baseTurtles 1 [
     hide-turtle
     move-to base
-    initTurtles
+    set resAlive []
+    set resDead []
+    create-links-with other turtles [hide-link]
   ]
 end
 
@@ -106,22 +122,64 @@ to initTurtles
   ;these operations are perforemed whenever a turtle is created, regardless of breed
   set size uav-Size
   set shape uav-shape
+  set searching TRUE
   create-links-with other turtles [hide-link]
 end
-
 
 
 ;main program loop, linked to the go button, each 'press' executes this loop once
 to go
   ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
   if ticks < 1 [reset-perspective] ;STUBB
-  ;2. check if over max flight time
-  if ticks > endurance [stop]
+  ;2 run the program for twice the maximum flight time, assume everyone is out of battery by now
+  if ticks > motorEndurance * 2 [stop]
   ;3. if everyone has been found stop the progam
   if not any? patches with [pcolor = victimColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
-  ask links [
+  updateLinks
+
+  ;5. check with base if there is a message in range
+  comBase
+  ;6. Pass messages between UAVs
+  comUAVs
+  ;execute uav movment behaviour
+  ask searchers with [searching = TRUE] [uavBehave]
+  ;refresh the graphics window, then hold all other updates until next iteration
+  ask searchers [ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
+  display
+  no-display
+  ;increment the time counter
+  tick
+end
+
+to comBase
+    ask searchers with [searching = TRUE] [  
+    if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
+      ;for the messageBearing UAV, pass the message to base
+      foreach resAlive [ ;go through the list of messages to be passed to base
+        let searcherDone (item 0 ?)
+        if searcherDone != nobody and (member? ? baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
+          ask searcherDone [
+            set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
+            set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
+            set baseResDead fput (list self pxcor pycor pzcor) baseResDead ;update the base lists
+            ask baseTurtles [set resDead baseResDead] ;pass this to the base turtle, ready for communication
+            ifelse searchersStayAlive [set searching TRUE] [die] ;If the craft can continue having found someone, change their breed and return them to normal duties
+          ]
+        ]
+        
+
+      ]
+      ;Now Send the message to base
+      ask self [ask baseTurtles [communicate myself self]]
+    ]
+    
+  ]
+end
+
+to updateLinks
+    ask links [
     ask both-ends [ifelse distance-nowrap other-end > comRange [
       ask myself [hide-link]
     ][
@@ -129,96 +187,21 @@ to go
     ]
     ]
   ]
+end
 
-
-  ;5. check with base if there is a message in range
+to comUAVs
   ask searchers [
-    ifelse resAlive = [] [set color normalColor] [set color foundColor]   
-    if (distance-nowrap base < comRange) and (resAlive != []) [ ;check if a message bearing UAV is in range of Base 
-      ;for the messageBearing UAV, pass the message to base
-      foreach resAlive [ ;go through the list of messages to be passed to base
-        if (item 0 ?1) != nobody [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
-          ask (item 0 ?1) [
-            set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
-            set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
-            ;update the base lists
-            set baseResDead fput (list self pxcor pycor pzcor) baseResDead
-            set baseResAlive remove (list self pxcor pycor pzcor) baseResAlive
-            ;remove duplicates from the base list
-            set baseResDead remove-duplicates baseResDead
-            set baseResAlive remove-duplicates baseResDead
-            ;and update the UAV relaying the message's lists with base
-            ask myself [ 
-              set resDead baseResDead
-              set resAlive baseResAlive
-            ]
-            
-            ;If the craft can continue having found someone, change their breed and return them to normal duties
-            if searchersStayAlive [
-              hatch-searchers 1 [
-                set color normalColor
-                initTurtles
-                ]
-            ]
-            ;either way the old craft dies, as it has informed base now
-            die
-             
-          ]
+    if componentBatteryLife > 0 [
+      set componentBatteryLife componentBatteryLife - 1 ;use component battery power
+      if resAlive != [] or searching = FALSE [
+        ask other searchers[
+          if distance-nowrap myself < comRange [;check if they are in range of me
+            communicate myself self
+          ] 
         ]
-        
-
-      ]
-      ;This is for in range but redundant message
-      ask self [ 
-        set resDead baseResDead
-        set resAlive baseResAlive
       ]
     ]
-    
   ]
-  
-  ;6. Pass messages between UAVs
-  ask searchers [
-    if resAlive != [] [ ;check if found something, if so executre following
-      ask searchers [ ;try and communicate the message to other nearby UAVS
-        if distance-nowrap myself < comRange [;check if they are in range of me
-          set color foundColor ;if they are make those UAVs white also
-          communicate myself self
-        ]  
-      ]
-    ]
-    
-    ;If nothing has been found, execute the remaining code
-    ifelse clearPath? [
-      right random turnSize
-      ;adjustPitch
-      ] ;if blocked turn a random amount between 0 and 60 degrees
-      [uavBehave] ;otherwise execute normal movement code
-    
-    if pcolor = victimColor and (count searchersDone-here) < 1 and (random 99 < detectionChance) [
-      hatch-searchersDone 1 [
-        set color rescueColor
-        set resAlive fput (list self pxcor pycor pzcor) resAlive
-        initTurtles
-       ]
-      die
-    ]
-    
-    
-  ]
-  
-  ;7 Attempt to communicate message from drone who has found victim
-  ask searchersDone [ ;Main loop for those UAVs who have found a victim
-    ask searchers [ ;check for nearby searchers to relay the message to 
-      if distance-nowrap myself < comRange ;check if they are in range
-      [set color foundColor ;change color to white if in range
-        communicate myself self
-       ] 
-      
-    ]
-  ]
-  ;increment the time counter
-  tick
 end
  
 to build-rubble
@@ -343,11 +326,13 @@ to build-rubble
 end
 
 to communicate [agent1 agent2]   ;need to swap and compare lists with communicating turtle
-  ;extract the lists from the agents, use temporary varaibles
+  ;Setup temporary variables to store data from agent, for lists
   let agent1Survivor nobody
   let agent1Notified nobody
   let agent2Survivor nobody
   let agent2Notified nobody
+
+  ;extract the infomation (lists and battery life from the agents
   ask agent1 [
     set agent1Survivor resAlive
     set agent1Notified resDead
@@ -356,52 +341,66 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
     set agent2Survivor resAlive
     set agent2Notified resDead
   ]
-  ;then execute the protocol
-  ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
-  set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
-  set agent1Notified remove-duplicates agent1Notified ;remove duplicates
-  ;2. The survivor lists are combined as in 1.
-  set agent1Survivor sentence agent1Survivor agent2Survivor ;combine the lists
-  set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
-  ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
-  foreach agent1Survivor [
-   if member? ?1 agent1Notified [
-     set agent1Survivor (remove ?1 agent1Survivor)
-   ] 
-  ]
-  ;now redistibute the lists to the agents
-  ask agent1 [
-    set resAlive agent1Survivor 
-    set resDead agent1Notified 
-  ]
-  ask agent2 [
-    set resAlive agent1Survivor 
-    set resDead agent1Notified 
-  ]
+    ;then execute the protocol
+    ;1. The notified lists are combined, no duplicates are created but the updated lists should feature any agent that appears on either list.
+    set agent1Notified sentence agent1Notified agent2Notified ;combine the lists
+    set agent1Notified remove-duplicates agent1Notified ;remove duplicates
+    ;2. The survivor lists are combined as in 1.
+    set agent1Survivor sentence agent1Survivor agent2Survivor ;combine the lists
+    set agent1Survivor remove-duplicates agent1Survivor ;remove duplicates
+    ;3. Any agent that now features on both the notified and survivors lists is deleted from the survivors list.
+    foreach agent1Survivor [
+      if member? ? agent1Notified [
+        set agent1Survivor (remove ? agent1Survivor)
+      ] 
+    ]
+    ;now redistibute the lists to the agents
+    ask agent1 [
+      set resAlive agent1Survivor 
+      set resDead agent1Notified
+    ]
+    ask agent2 [
+      set resAlive agent1Survivor 
+      set resDead agent1Notified
+    ]
 end
 
 to uavBehave
-  ifelse resAlive != [] and messageTime >= 0 [
-    ;this is for if the UAV is trying to pass on a message
-    if messageTime > comLength [set messageTime (- comLength)]
-    
-  ]
-  
-  [
-    ;this is the behaviour otherwise
-    ifelse seeVictim != nobody [face seeVictim]
-    [
-      forward moveDistance
-      adjustPitch
+    ;check battery power
+    ifelse motorBatteryLife > 0 [
+      
+      ;This is the for those who have found a victim
+      if pcolor = victimColor and (count other searchers-here) < 1 [
+        set resAlive fput (list self pxcor pycor pzcor) resAlive
+        set searching FALSE
+      ]
+      
+      ;if low on power and in range of base, land, this takes priority over movement
+      ifelse distance-nowrap base < comRange and (componentBatteryLife < lowBatteryThreshold * componentEndurance or motorBatteryLife < lowBatteryThreshold * motorEndurance) [
+        let ground 0
+        ask patch-here [set ground floorHeight + 1]
+        if zcor > ground [ 
+          set zcor zcor - moveDistance
+        ]
+      ]
+      
+      [;-----if everything is working, attempt to behave as normal-----
+        set motorBatteryLife motorBatteryLife - 1 ;use motor power
+        ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
+        [ 
+            let victimLocation seeVictim
+            if victimLocation != nobody [face victimLocation]
+            forward moveDistance
+            adjustPitch
+        ]
+      ] ;-----end normal behaviour-----
+      
+    ] [
+    let ground 0
+    ask patch-here [set ground floorHeight + 1]
+    set color red
+    set zcor ground
     ]
-    ;default is just to fly forward
-    forward moveDistance
-    adjustPitch
-  ]
-  set messageTime (messageTime + 1)
-  
-  ;if the path should be traced, set the space the uav currently occupies to another color
-  ;set pcolor yellow
 end
 
 to adjustPitch
@@ -438,6 +437,7 @@ end
 
 to-report seeVictim
   let whereVictim nobody
+  if random 100 < detectionChance [
   let target-patch1 patch-ahead detectionRange
   ask target-patch1 [
     ask patch pxcor pycor (floorHeight + 1) [
@@ -467,13 +467,9 @@ to-report seeVictim
       set whereVictim self
     ]
   ]
-  
+  ]
   report whereVictim
 end
-
-to-report inRange?
-  ifelse distance base < comRange [report TRUE] [report FALSE]
-end 
 
 to setupVariables
   ;global trackers
@@ -482,19 +478,21 @@ to setupVariables
   ;scale
   set patchSize 10
   set ModelHeight 20
-  set worldSize 50
+  set worldSize 40
   
   ;parameters
   set tickLength 0.05
   set uav-shape "orbit 4"
   set UAV-size 1
   set sightRange 2
-  set comRange 7
+  set comRange 10
   set moveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
-  set endurance 30
   set comLength 60
+  set motorEndurance 20
+  set componentEndurance 40
+  set lowBatteryThreshold 0.4
   
   ;genetics
   set searchersStayAlive TRUE
@@ -506,7 +504,7 @@ to setupVariables
   set normalColor orange
   set buildingColor [70 200 70 7]
   set baseColor 255
-  set rescueColor lime
+  ;set rescueColor lime
   set victimColor [0 130 255 150]
   set victimFoundColor yellow
   set comColor [250 200 150]
@@ -517,11 +515,11 @@ to setupVariables
   set turnSize turnSize * tickLength
   set sightRange sightRange * tickLength
   set moveDistance moveDistance * tickLength
-  set endurance (endurance * 60) / tickLength
   set comLength comLength / tickLength
+  set motorEndurance (motorEndurance * 60) / tickLength
+  set componentEndurance (componentEndurance * 60) / tickLength
   
   ;other
-  set baseResAlive []
   set baseResDead []
    
 end
@@ -529,10 +527,10 @@ end
 GRAPHICS-WINDOW
 0
 0
-520
-541
-25
-25
+420
+441
+20
+20
 10.0
 1
 10
@@ -543,10 +541,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--25
-25
--25
-25
+-20
+20
+-20
+20
 -10
 10
 1
@@ -564,7 +562,7 @@ population
 population
 1
 100
-24
+15
 1
 1
 NIL
@@ -613,7 +611,7 @@ density
 density
 0
 50
-21
+27
 1
 1
 NIL
@@ -639,11 +637,29 @@ detectionChance
 detectionChance
 0
 100
-98
+50
 1
 1
 NIL
 HORIZONTAL
+
+PLOT
+238
+117
+660
+456
+Victims Found
+NIL
+NIL
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot rescued"
 
 @#$#@#$#@
 ## WHAT IS IT?
