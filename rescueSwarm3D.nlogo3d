@@ -84,7 +84,6 @@ globals [
 ] 
 ;-----End Variable Decleration-----
 
-
 ;setup function, run at the begining of each simulation
 to setup
   ;reset the state and time
@@ -128,8 +127,6 @@ to initTurtles
 end
 
 
-
-
 ;main program loop, linked to the go button, each 'press' executes this loop once
 to go
   ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
@@ -147,11 +144,9 @@ to go
   ;execute uav movment behaviour
   ask searchers with [searching = TRUE] [uavBehave]
   ;refresh the graphics window, then hold all other updates until next iteration
-  ask searchers [
-    ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
-  ]
-  ;display
-  ;no-display
+  ask searchers [ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
+  display
+  no-display
   ;increment the time counter
   tick
 end
@@ -639,7 +634,7 @@ detectionChance
 detectionChance
 0
 100
-100
+50
 1
 1
 NIL
