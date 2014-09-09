@@ -131,8 +131,10 @@ end
 to go
   ;1. If this is the first iteration, make the 3D window active, not sure how to do this, the following line is a stubb
   if ticks < 1 [reset-perspective] ;STUBB
+  ;2 run the program for twice the maximum flight time, assume everyone is out of battery by now
+  if ticks > motorEndurance * 2 [stop]
   ;3. if everyone has been found stop the progam
-  ;if not any? patches with [pcolor = victimColor] [stop]
+  if not any? patches with [pcolor = victimColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
   updateLinks
@@ -1011,7 +1013,7 @@ Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 
 @#$#@#$#@
-NetLogo 3D 5.1.0
+NetLogo 3D 5.0.5
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
