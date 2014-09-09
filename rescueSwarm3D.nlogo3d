@@ -75,7 +75,8 @@ globals [
   buildingColor
   ;rescueColor
   victimColor
-  victimFoundColor
+  victimLocatedColor
+  victimRescuedColor
   floorColor
   roofColor
   comColor 
@@ -167,7 +168,7 @@ to comBase
         let searcherDone (item 0 ?)
         if searcherDone != nobody and (member? ? baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
           ask searcherDone [
-            set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
+            set pcolor victimRescuedColor ;indicates that the rescuers now know the location of the victim
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
             set baseResDead fput (list self pxcor pycor pzcor) baseResDead ;update the base lists
             ask baseTurtles [set resDead baseResDead] ;pass this to the base turtle, ready for communication
@@ -267,6 +268,8 @@ to uavBehave
     if pcolor = victimColor and (count other searchers-here) < 1 [
       set resAlive fput (list self pxcor pycor pzcor) resAlive
       set searching FALSE
+      set pcolor victimLocatedColor
+      set zcor floorHeight + 1
     ]
     
     ;if low on power and in range of base, land, this takes priority over movement
@@ -283,11 +286,10 @@ to uavBehave
       ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
         [ 
           let victimLocation seeVictim
-          if victimLocation != nobody [set zcor zcor - moveDistance]
-          
-          ifelse (zcor < (floorHeight + 2)) [set zcor zcor + moveDistance] [
-            adjustPitch
-            forward moveDistance]
+          if victimLocation != nobody [face seeVictim]
+
+            adjustHeight
+            forward moveDistance
         ]
     ] ;-----end normal behaviour-----
     
@@ -299,19 +301,13 @@ to uavBehave
   ]
 end
 
-to adjustPitch
+to adjustHeight
   let desiredHeight 0
-  ask patch-here [
-    set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)
-  ]
-  let pitchRate 0
-  set pitchRate turnSize * abs ((pzcor - desiredHeight) / (roofHeight - floorHeight))
-  ifelse pzcor < desiredHeight [
-    set pitch pitchRate
-  ]
-  [
-    set pitch (- pitchRate)
-  ]
+  let goUp FALSE
+  ask patch-here [set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)] ;aim for the middle of the floor and ceiling
+  ifelse pzcor > desiredHeight or victimBelow? patch-here = TRUE [set goUp FALSE][set goUp TRUE]
+  ifelse goUP = TRUE [set zcor zcor + moveDistance * 0.2] [set zcor zcor - moveDistance * 0.2]
+  set pitch 0
 end
 
 to-report clearPath?
@@ -331,33 +327,45 @@ to-report clearPath?
   report blocked
 end
 
+to-report victimBelow? [targetPatch]
+  let victimBelow FALSE
+  ask targetPatch [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set victimBelow TRUE
+      ]
+    ]
+  ]
+  report victimBelow
+end
+
 to-report seeVictim
   let whereVictim nobody
   if random 100 < detectionChance [
-;  let target-patch1 patch-ahead detectionRange
-;  ask target-patch1 [
-;    ask patch pxcor pycor (floorHeight + 1) [
-;      if [pcolor] of self = victimColor and count turtles-here < 1 [
-;        set whereVictim self
-;      ]
-;    ]
-;  ]
-;  let target-patch2 patch-right-and-ahead (visionCone / 2) detectionRange
-;  ask target-patch2 [
-;    ask patch pxcor pycor (floorHeight + 1) [
-;      if [pcolor] of self = victimColor and count turtles-here < 1 [
-;        set whereVictim self
-;      ]
-;    ]
-;  ]
-;  let target-patch3 patch-left-and-ahead (visionCone / 2) detectionRange
-;  ask target-patch2 [
-;    ask patch pxcor pycor (floorHeight + 1)[
-;      if [pcolor] of self = victimColor and count turtles-here < 1 [
-;        set whereVictim self
-;      ]
-;    ]
-;  ]
+  let target-patch1 patch-ahead detectionRange
+  ask target-patch1 [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
+  let target-patch2 patch-right-and-ahead (visionCone / 2) detectionRange
+  ask target-patch2 [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
+  let target-patch3 patch-left-and-ahead (visionCone / 2) detectionRange
+  ask target-patch2 [
+    ask patch pxcor pycor (floorHeight + 1)[
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set whereVictim self
+      ]
+    ]
+  ]
   ask patch pxcor pycor (floorHeight + 1) [
     if [pcolor] of self = victimColor and count turtles-here < 1 [
       set whereVictim self
@@ -403,8 +411,9 @@ to setupVariables
   set buildingColor [70 200 70 7]
   set baseColor 255
   ;set rescueColor lime
-  set victimColor [0 130 255 150]
-  set victimFoundColor yellow
+  set victimColor [0 120 255]
+  set victimLocatedColor [0 130 255 120]
+  set victimRescuedColor yellow
   set comColor [250 200 150]
   set floorColor [100 100 100]
   set roofColor [100 100 100 10]
@@ -630,7 +639,7 @@ density
 density
 0
 50
-23
+15
 1
 1
 NIL
