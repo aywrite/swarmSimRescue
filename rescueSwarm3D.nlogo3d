@@ -71,7 +71,7 @@ globals [
   foundColor
   normalColor
   buildingColor
-  rescueColor
+  ;rescueColor
   victimColor
   victimFoundColor
   floorColor
@@ -137,22 +137,16 @@ to go
   if not any? patches with [pcolor = victimColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
-  ask links [
-    ask both-ends [ifelse distance-nowrap other-end > comRange [
-      ask myself [hide-link]
-    ][
-    ask myself [show-link]
-    ]
-    ]
-  ]
+  updateLinks
+  ;refresh the graphics window, then hold all other updates until next iteration
+  display
+  no-display
   ;5. check with base if there is a message in range
   comBase
   ;6. Pass messages between UAVs
   comUAVs
   ;execute uav movment behaviour
   uavBehave
-  ;7 Attempt to communicate message from drone who has found victim
-  comFound
   ;increment the time counter
   tick
 end
@@ -180,10 +174,7 @@ to comBase
             ]
             
             ;If the craft can continue having found someone, change their breed and return them to normal duties
-            ifelse searchersStayAlive [
-              set searching TRUE
-              set color normalColor
-            ] [die]
+            ifelse searchersStayAlive [set searching TRUE] [die]
           ]
         ]
         
@@ -199,34 +190,28 @@ to comBase
   ]
 end
 
-to comUAVs
-    ask searchers with [searching = TRUE] [
-    if resAlive != [] [ ;check if found something, if so executre following
-      ask other searchers with [searching = TRUE] [ ;try and communicate the message to other nearby UAVS
-        if distance-nowrap myself < comRange [;check if they are in range of me
-          communicate myself self
-        ]  
-      ]
+to updateLinks
+    ask links [
+    ask both-ends [ifelse distance-nowrap other-end > comRange [
+      ask myself [hide-link]
+    ][
+    ask myself [show-link]
     ]
-    
-
-    
-    if pcolor = victimColor and (count other searchers-here) < 1 and (random 100 < detectionChance) [
-        set color rescueColor
-        set resAlive fput (list self pxcor pycor pzcor) resAlive
-        set searching FALSE
     ]
-   
   ]
+  
 end
 
-to comFound
-    ask searchers with [searching = FALSE] [ ;Main loop for those UAVs who have found a victim
-    set componentBatteryLife componentBatteryLife - 1 ;use component power, UAV is landed so no motor Power Required
-    ask searchers with [searching = TRUE] [ ;check for nearby searchers to relay the message to 
-      if distance-nowrap myself < comRange [communicate myself self] ;check if they are in range
+to comUAVs
+    ask searchers [
+      if resAlive != [] or searching = FALSE [
+        ask other searchers[
+          if distance-nowrap myself < comRange [;check if they are in range of me
+            communicate myself self
+          ] 
+        ]
+      ]
     ]
-  ]
 end
  
 to build-rubble
@@ -390,12 +375,12 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
     ask agent1 [
       set resAlive agent1Survivor 
       set resDead agent1Notified
-      if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
+      ;if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
     ]
     ask agent2 [
       set resAlive agent1Survivor 
       set resDead agent1Notified
-      if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
+      ;if resAlive != [] [set color foundColor] ;if they are make those UAVs white also
     ]
   ]
 end
@@ -406,7 +391,13 @@ to uavBehave
     ifelse motorBatteryLife > 0 [
       set componentBatteryLife componentBatteryLife - 1 ;use component battery power
       
-                                                        ;if low on power and in range of base, land, this takes priority over movement
+      ;This is the for those who have found a victim
+      if pcolor = victimColor and (count other searchers-here) < 1 and (random 100 < detectionChance) [
+        set resAlive fput (list self pxcor pycor pzcor) resAlive
+        set searching FALSE
+      ]
+      
+      ;if low on power and in range of base, land, this takes priority over movement
       ifelse distance-nowrap base < comRange and (componentBatteryLife < lowBatteryThreshold * componentEndurance or motorBatteryLife < lowBatteryThreshold * motorEndurance) [
         let ground 0
         ask patch-here [set ground floorHeight + 1]
@@ -512,7 +503,7 @@ to setupVariables
   ;scale
   set patchSize 10
   set ModelHeight 20
-  set worldSize 50
+  set worldSize 30
   
   ;parameters
   set tickLength 0.05
@@ -538,7 +529,7 @@ to setupVariables
   set normalColor orange
   set buildingColor [70 200 70 7]
   set baseColor 255
-  set rescueColor lime
+  ;set rescueColor lime
   set victimColor [0 130 255 150]
   set victimFoundColor yellow
   set comColor [250 200 150]
@@ -562,10 +553,10 @@ end
 GRAPHICS-WINDOW
 0
 0
-520
-541
-25
-25
+320
+341
+15
+15
 10.0
 1
 10
@@ -576,10 +567,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--25
-25
--25
-25
+-15
+15
+-15
+15
 -10
 10
 1
@@ -597,7 +588,7 @@ population
 population
 1
 100
-30
+12
 1
 1
 NIL
@@ -1030,7 +1021,7 @@ Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 
 @#$#@#$#@
-NetLogo 3D 5.0.5
+NetLogo 3D 5.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
