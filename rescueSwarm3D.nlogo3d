@@ -65,7 +65,7 @@ globals [
   searchersStayAlive
   turtleColision
   standardTurnSize
-  swarmBehaviour
+  ;swarmBehaviour
   
   ;colors
   baseColor
@@ -402,7 +402,7 @@ to setupVariables
   set searchersStayAlive TRUE
   set turtleColision FALSE
   set standardTurnSize turnSizeSlider
-  set swarmBehaviour TRUE
+  ;set swarmBehaviour TRUE
   
   ;colors
   set foundColor white
@@ -638,7 +638,7 @@ density
 density
 0
 50
-6
+40
 1
 1
 NIL
@@ -697,19 +697,29 @@ totalVictims
 11
 
 SLIDER
-1119
-226
-1291
-259
+1078
+188
+1250
+221
 comRange
 comRange
 0
 100
-0
+10
 0.5
 1
 NIL
 HORIZONTAL
+
+CHOOSER
+1079
+222
+1217
+267
+swarmBehaviour
+swarmBehaviour
+true false
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1080,17 +1090,28 @@ NetLogo 3D 5.0.5
       <value value="true"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="comRangeExperiment" repetitions="5" runMetricsEveryStep="false">
+  <experiment name="comRangeExperiment" repetitions="100" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <exitCondition>ticks &gt; 25000 or rescued &gt; totalVictims</exitCondition>
     <metric>rescued</metric>
     <metric>totalVictims</metric>
-    <steppedValueSet variable="comRange" first="0.5" step="0.5" last="20"/>
-    <steppedValueSet variable="density" first="5" step="1" last="40"/>
+    <steppedValueSet variable="comRange" first="5" step="5" last="20"/>
     <enumeratedValueSet variable="swarmBehaviour">
       <value value="false"/>
       <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="DensityExperiment" repetitions="30" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 29999 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="density" first="4" step="1" last="40"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="true"/>
+      <value value="false"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
