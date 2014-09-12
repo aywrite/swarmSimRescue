@@ -248,18 +248,8 @@ to communicate [agent1 agent2]   ;need to swap and compare lists with communicat
 end
 
 to uavBehave
-  ;First setup the swarm parameters that will govern behavour
-  if swarmBehaviour = TRUE [
-  ask other searchers [
-    ifelse distance myself < (comRange / 2) [
-      if who mod 2 = 0 [set turnSize (- standardTurnSize)]
-      set moveDistance standardMoveDistance / (who + 1)
-    ] [
-      set turnSize standardTurnSize
-      set moveDistance standardMoveDistance
-    ]
-  ]
-  ] 
+  ;swarmMovement alters turtle parameters to make them behave as a swarm, only runs if this is enabled from the interface
+  if swarmBehaviour = TRUE [swarmMovement]
   ;check battery power
   ifelse motorBatteryLife > 0 [
     
@@ -297,6 +287,19 @@ to uavBehave
   ask patch-here [set ground floorHeight + 1]
   set color red
   set zcor ground
+  ]
+end
+
+to swarmMovement
+  ;setup the swarm parameters that will govern behavour
+  ask other searchers [
+    ifelse distance myself < (comRange / 2) [
+      if who mod 2 = 0 [set turnSize (- standardTurnSize)]
+      set moveDistance standardMoveDistance / (who + 1)
+    ] [
+    set turnSize standardTurnSize
+    set moveDistance standardMoveDistance
+    ]
   ]
 end
 
