@@ -41,6 +41,7 @@ breed [baseTurtles baseTurtle] ;this is a dummy turtle used at base
 globals [
   ;global trackers
   rescued
+  totalVictims
   
   ;scale
   patchSize
@@ -52,7 +53,6 @@ globals [
   uav-shape
   UAV-size
   sightRange
-  comRange
   standardMoveDistance
   detectionRange
   visionCone
@@ -65,6 +65,7 @@ globals [
   searchersStayAlive
   turtleColision
   standardTurnSize
+  ;swarmBehaviour
   
   ;colors
   baseColor
@@ -73,7 +74,8 @@ globals [
   buildingColor
   ;rescueColor
   victimColor
-  victimFoundColor
+  victimLocatedColor
+  victimRescuedColor
   floorColor
   roofColor
   comColor 
@@ -117,6 +119,7 @@ to setup
     set resDead []
     create-links-with other turtles [hide-link]
   ]
+  set totalVictims (count patches with [pcolor = victimColor])
 end
 
 to initTurtles
@@ -137,7 +140,7 @@ to go
   ;2 run the program for twice the maximum flight time, assume everyone is out of battery by now
   if ticks > motorEndurance * 2 [stop]
   ;3. if everyone has been found stop the progam
-  if not any? patches with [pcolor = victimColor] [stop]
+  if not any? patches with [pcolor = victimColor] and not any? patches with [pcolor = victimLocatedColor] [stop]
   
   ;4. check the distances between all UAVs and show links where they are in communication range of each other
   updateLinks
@@ -147,7 +150,7 @@ to go
   ;6. Pass messages between UAVs
   comUAVs
   ;execute uav movment behaviour
-  ask searchers with [searching = TRUE] [uavBehave]
+  ask searchers with [searching = TRUE] [if ticks > who / tickLength [uavBehave]]
   ;refresh the graphics window, then hold all other updates until next iteration
   ask searchers [ifelse resAlive = [] [if componentBatteryLife > 0 [set color normalColor]] [if componentBatteryLife > 0 [set color foundColor]]] ;assign colors to drones based on whether they think they have new info, of they have no battery do not update color.
   display
@@ -164,7 +167,7 @@ to comBase
         let searcherDone (item 0 ?)
         if searcherDone != nobody and (member? ? baseResDead) = FALSE [ ;if base already knows, skip the next bit to stop errors (performing 'ask' on 'nobody')
           ask searcherDone [
-            set pcolor victimFoundColor ;indicates that the rescuers now know the location of the victim
+            set pcolor victimRescuedColor ;indicates that the rescuers now know the location of the victim
             set rescued (rescued + 1) ;increment the global counter to show how many people have been rescued
             set baseResDead fput (list self pxcor pycor pzcor) baseResDead ;update the base lists
             ask baseTurtles [set resDead baseResDead] ;pass this to the base turtle, ready for communication
@@ -246,14 +249,16 @@ end
 
 to uavBehave
   ;First setup the swarm parameters that will govern behavour
+  if swarmBehaviour = TRUE [
   ask other searchers [
-    ifelse distance myself < (comRange / 2) and who mod 2 = 0 [
-      set turnSize (- turnSize)
-      set moveDistance moveDistance / 2
+    ifelse distance myself < (comRange / 2) [
+      if who mod 2 = 0 [set turnSize (- standardTurnSize)]
+      set moveDistance standardMoveDistance / (who + 1)
     ] [
       set turnSize standardTurnSize
       set moveDistance standardMoveDistance
     ]
+  ]
   ] 
   ;check battery power
   ifelse motorBatteryLife > 0 [
@@ -262,6 +267,8 @@ to uavBehave
     if pcolor = victimColor and (count other searchers-here) < 1 [
       set resAlive fput (list self pxcor pycor pzcor) resAlive
       set searching FALSE
+      set pcolor victimLocatedColor
+      set zcor floorHeight + 1
     ]
     
     ;if low on power and in range of base, land, this takes priority over movement
@@ -278,9 +285,10 @@ to uavBehave
       ifelse clearPath? [right random turnSize] ;if blocked turn a random amount between 0 and 60 degrees
         [ 
           let victimLocation seeVictim
-          if victimLocation != nobody [face victimLocation]
-          forward moveDistance
-          adjustPitch
+          if victimLocation != nobody [face seeVictim]
+
+            adjustHeight
+            forward moveDistance
         ]
     ] ;-----end normal behaviour-----
     
@@ -292,36 +300,42 @@ to uavBehave
   ]
 end
 
-to adjustPitch
+to adjustHeight
   let desiredHeight 0
-  ask patch-here [
-    set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)
-  ]
-  let pitchRate 0
-  set pitchRate turnSize * abs ((pzcor - desiredHeight) / (roofHeight - floorHeight))
-  ifelse pzcor < desiredHeight [
-    set pitch pitchRate
-  ]
-  [
-    set pitch (- pitchRate)
-  ]
+  let goUp FALSE
+  ask patch-here [set desiredHeight (roofHeight - (roofHeight - floorHeight) / 2)] ;aim for the middle of the floor and ceiling
+  ifelse pzcor > desiredHeight or victimBelow? patch-here = TRUE [set goUp FALSE][set goUp TRUE]
+  ifelse goUP = TRUE [set zcor zcor + moveDistance * 0.2] [set zcor zcor - moveDistance * 0.2]
+  set pitch 0
 end
 
 to-report clearPath?
   let blocked FALSE
   let target-patch1 patch-ahead sightRange
-  if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count turtles-on target-patch1 > 0 and turtleColision = TRUE) [
+  if target-patch1 = nobody or [isSolid] of target-patch1 = TRUE or (count other turtles-on target-patch1 > 0 and turtleColision = TRUE and patch-here != base) [
     set blocked TRUE
   ]
   let target-patch2 patch-right-and-ahead 30 sightRange
-  if target-patch2 = nobody or [isSolid] of target-patch2 = TRUE or (count turtles-on target-patch2 > 0 and turtleColision = TRUE)[
+  if target-patch2 = nobody or [isSolid] of target-patch2 = TRUE or (count other turtles-on target-patch2 > 0 and turtleColision = TRUE and patch-here != base)[
     set blocked TRUE
   ]
   let target-patch3 patch-left-and-ahead 30 sightRange
-  if target-patch3 = nobody or [isSolid] of target-patch3 = TRUE or (count turtles-on target-patch3 > 0 and turtleColision = TRUE)[
+  if target-patch3 = nobody or [isSolid] of target-patch3 = TRUE or (count other turtles-on target-patch3 > 0 and turtleColision = TRUE and patch-here != base)[
     set blocked TRUE
   ]
   report blocked
+end
+
+to-report victimBelow? [targetPatch]
+  let victimBelow FALSE
+  ask targetPatch [
+    ask patch pxcor pycor (floorHeight + 1) [
+      if [pcolor] of self = victimColor and count turtles-here < 1 [
+        set victimBelow TRUE
+      ]
+    ]
+  ]
+  report victimBelow
 end
 
 to-report seeVictim
@@ -363,6 +377,7 @@ end
 to setupVariables
   ;global trackers
   set rescued 0
+
   
   ;scale
   set patchSize 10
@@ -374,7 +389,7 @@ to setupVariables
   set uav-shape "orbit 4"
   set UAV-size 1
   set sightRange 2
-  set comRange 10
+  ;set comRange 10
   set standardMoveDistance 1.5
   set detectionRange sightRange
   set visionCone 60
@@ -386,7 +401,8 @@ to setupVariables
   ;genetics
   set searchersStayAlive TRUE
   set turtleColision FALSE
-  set standardTurnSize 60
+  set standardTurnSize turnSizeSlider
+  ;set swarmBehaviour TRUE
   
   ;colors
   set foundColor white
@@ -394,8 +410,9 @@ to setupVariables
   set buildingColor [70 200 70 7]
   set baseColor 255
   ;set rescueColor lime
-  set victimColor [0 130 255 150]
-  set victimFoundColor yellow
+  set victimColor [0 120 255]
+  set victimLocatedColor [0 130 255 120]
+  set victimRescuedColor yellow
   set comColor [250 200 150]
   set floorColor [100 100 100]
   set roofColor [100 100 100 10]
@@ -621,7 +638,7 @@ density
 density
 0
 50
-10
+40
 1
 1
 NIL
@@ -653,23 +670,56 @@ detectionChance
 NIL
 HORIZONTAL
 
-PLOT
-238
-117
-660
-456
-Victims Found
+SLIDER
+1078
+153
+1250
+186
+turnSizeSlider
+turnSizeSlider
+0
+360
+174
+1
+1
 NIL
+HORIZONTAL
+
+MONITOR
+977
+70
+1058
+115
+Total Victims
+totalVictims
+0
+1
+11
+
+SLIDER
+1078
+188
+1250
+221
+comRange
+comRange
+0
+100
+10
+0.5
+1
 NIL
-0.0
-10.0
-0.0
-10.0
-true
-false
-"" ""
-PENS
-"default" 1.0 0 -16777216 true "" "plot rescued"
+HORIZONTAL
+
+CHOOSER
+1079
+222
+1217
+267
+swarmBehaviour
+swarmBehaviour
+true false
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1027,6 +1077,44 @@ NetLogo 3D 5.0.5
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="turnSizeExperiment" repetitions="3" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 30000 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="turnSizeSlider" first="0" step="2" last="180"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="comRangeExperiment" repetitions="100" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 25000 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="comRange" first="5" step="5" last="20"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="false"/>
+      <value value="true"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="DensityExperiment" repetitions="30" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 29999 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <steppedValueSet variable="density" first="4" step="1" last="40"/>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="true"/>
+      <value value="false"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
