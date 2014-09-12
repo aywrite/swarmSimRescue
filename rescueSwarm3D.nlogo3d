@@ -293,12 +293,15 @@ end
 to swarmMovement
   ;setup the swarm parameters that will govern behavour
   ask other searchers [
-    ifelse distance myself < (comRange / 2) [
-      if who mod 2 = 0 [set turnSize (- standardTurnSize)]
-      set moveDistance standardMoveDistance / (who + 1)
-    ] [
-    set turnSize standardTurnSize
-    set moveDistance standardMoveDistance
+    if distance-nowrap myself < (comRange / 2) [
+      if who mod 2 = 0 [
+        set turnSize (- standardTurnSize)
+        set moveDistance standardMoveDistance / (2)
+      ]
+    ] 
+    if count (other searchers with [distance-nowrap myself < (comRange / 2)]) < 1[
+      set turnSize standardTurnSize
+      set moveDistance standardMoveDistance
     ]
   ]
 end
@@ -641,7 +644,7 @@ density
 density
 0
 50
-40
+15
 1
 1
 NIL
@@ -682,7 +685,7 @@ turnSizeSlider
 turnSizeSlider
 0
 360
-174
+60
 1
 1
 NIL
@@ -722,7 +725,7 @@ CHOOSER
 swarmBehaviour
 swarmBehaviour
 true false
-1
+0
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1105,13 +1108,13 @@ NetLogo 3D 5.1.0
       <value value="true"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="DensityExperiment" repetitions="30" runMetricsEveryStep="false">
+  <experiment name="DensityExperiment" repetitions="20" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <exitCondition>ticks &gt; 29999 or rescued &gt; totalVictims</exitCondition>
     <metric>rescued</metric>
     <metric>totalVictims</metric>
-    <steppedValueSet variable="density" first="4" step="1" last="40"/>
+    <steppedValueSet variable="density" first="3" step="1" last="40"/>
     <enumeratedValueSet variable="swarmBehaviour">
       <value value="true"/>
       <value value="false"/>
