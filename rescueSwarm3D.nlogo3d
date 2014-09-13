@@ -65,7 +65,7 @@ globals [
   searchersStayAlive
   turtleColision
   standardTurnSize
-  ;swarmBehaviour
+  ;swarmModificationSize
   
   ;colors
   baseColor
@@ -296,7 +296,7 @@ to swarmMovement
     if distance-nowrap myself < (comRange / 2) [
       if who mod 2 = 0 [
         set turnSize (- standardTurnSize)
-        set moveDistance standardMoveDistance / (2)
+        set moveDistance standardMoveDistance / swarmModificationSize
       ]
     ] 
     if count (other searchers with [distance-nowrap myself < (comRange / 2)]) < 1[
@@ -408,7 +408,7 @@ to setupVariables
   set searchersStayAlive TRUE
   set turtleColision FALSE
   set standardTurnSize turnSizeSlider
-  ;set swarmBehaviour TRUE
+  ;set swarmModificationSize 2
   
   ;colors
   set foundColor white
@@ -711,7 +711,7 @@ comRange
 comRange
 0
 100
-10
+9
 0.5
 1
 NIL
@@ -725,7 +725,22 @@ CHOOSER
 swarmBehaviour
 swarmBehaviour
 true false
-0
+1
+
+SLIDER
+1127
+299
+1300
+332
+swarmModificationSize
+swarmModificationSize
+0.5
+10
+4.5
+0.1
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1108,17 +1123,29 @@ NetLogo 3D 5.1.0
       <value value="true"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="DensityExperiment" repetitions="20" runMetricsEveryStep="false">
+  <experiment name="DensityExperiment" repetitions="15" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <exitCondition>ticks &gt; 29999 or rescued &gt; totalVictims</exitCondition>
     <metric>rescued</metric>
     <metric>totalVictims</metric>
-    <steppedValueSet variable="density" first="3" step="1" last="40"/>
+    <steppedValueSet variable="density" first="2" step="2" last="40"/>
     <enumeratedValueSet variable="swarmBehaviour">
       <value value="true"/>
       <value value="false"/>
     </enumeratedValueSet>
+  </experiment>
+  <experiment name="SwarmModSizeExperiment" repetitions="100" runMetricsEveryStep="false">
+    <setup>setup</setup>
+    <go>go</go>
+    <exitCondition>ticks &gt; 19999 or rescued &gt; totalVictims</exitCondition>
+    <metric>rescued</metric>
+    <metric>totalVictims</metric>
+    <enumeratedValueSet variable="swarmBehaviour">
+      <value value="true"/>
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="swarmModificationSize" first="0.2" step="0.2" last="5"/>
   </experiment>
 </experiments>
 @#$#@#$#@
