@@ -725,7 +725,7 @@ CHOOSER
 swarmBehaviour
 swarmBehaviour
 true false
-1
+0
 
 SLIDER
 1127
@@ -736,7 +736,7 @@ swarmModificationSize
 swarmModificationSize
 0.5
 10
-4.5
+1.2
 0.1
 1
 NIL
@@ -1135,15 +1135,15 @@ NetLogo 3D 5.1.0
       <value value="false"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="SwarmModSizeExperiment" repetitions="100" runMetricsEveryStep="false">
+  <experiment name="SwarmModSizeExperiment" repetitions="1000" runMetricsEveryStep="false">
     <setup>setup</setup>
     <go>go</go>
     <exitCondition>ticks &gt; 19999 or rescued &gt; totalVictims</exitCondition>
     <metric>rescued</metric>
     <metric>totalVictims</metric>
     <enumeratedValueSet variable="swarmBehaviour">
-      <value value="true"/>
       <value value="false"/>
+      <value value="true"/>
     </enumeratedValueSet>
     <steppedValueSet variable="swarmModificationSize" first="0.2" step="0.2" last="5"/>
   </experiment>
